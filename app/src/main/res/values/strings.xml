@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Ditto</string>
+    <string name="accessibility_description">Enables Ditto to detect active input fields and automatically assist with inserting recorded audio notes.</string>
+</resources>

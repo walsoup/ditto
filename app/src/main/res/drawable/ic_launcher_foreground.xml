@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Clean White Flat Circular Surface -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#E0E6E2"
+        android:strokeWidth="1.5"
+        android:pathData="M28,54 A26,26 0 1,0 80,54 A26,26 0 1,0 28,54" />
+
+    <!-- Microphone Capsule Body -->
+    <path
+        android:fillColor="#2D6A4F"
+        android:pathData="M48,42 A6,6 0 0,1 60,42 L60,51 A6,6 0 0,1 48,51 Z" />
+
+    <!-- Microphone Cradle Bracket -->
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M44,46 L44,50 A10,10 0 0,0 64,50 L64,46" />
+
+    <!-- Microphone Stem -->
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M54,60 L54,66" />
+
+    <!-- Microphone Base Stand -->
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M46,66 L62,66" />
+
+    <!-- Audio Waveform Bars (Left) -->
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M38,45 L38,53" />
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M34,47 L34,51" />
+
+    <!-- Audio Waveform Bars (Right) -->
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M70,45 L70,53" />
+    <path
+        android:strokeColor="#2D6A4F"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M74,47 L74,51" />
+
+    <!-- Terracotta Recording Dot Accent -->
+    <path
+        android:fillColor="#D47255"
+        android:pathData="M65.5,33 A3.5,3.5 0 1,0 72.5,33 A3.5,3.5 0 1,0 65.5,33" />
+</vector>

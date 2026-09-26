@@ -65,19 +65,32 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
+import android.view.View
 import com.walsoup.ditto.MainActivity
 import com.walsoup.ditto.R
 import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
 import com.walsoup.ditto.core.audio.VoiceFilter
+import com.walsoup.ditto.data.AppFilterPolicy
 import com.walsoup.ditto.data.HistoryManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
 class FloatingBubbleService : Service() {
+
+    companion object {
+        var isRunning: Boolean = false
+            private set
+    }
+
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
     private lateinit var windowManager: WindowManager
     private lateinit var overlayView: ComposeView
@@ -100,6 +113,7 @@ class FloatingBubbleService : Service() {
     }
 
     private val overlayState = mutableStateOf(OverlayUiState.COLLAPSED)
+    private val isOverlayVisible = mutableStateOf(true)
     private val recordedWavFile = mutableStateOf<File?>(null)
     private val recordedDurationMs = mutableStateOf(0L)
     private val selectedFilter = mutableStateOf(VoiceFilter.RAW)
@@ -113,6 +127,7 @@ class FloatingBubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         recorderEngine = AudioRecorderEngine(this)
         playerHelper = AudioPlayerHelper(this)
@@ -126,18 +141,94 @@ class FloatingBubbleService : Service() {
         overlayView = ComposeView(this).apply {
             lifecycleOwner.attachToView(this)
             setContent {
-                MaterialTheme(
-                    colorScheme = lightColorScheme(
-                        primary = Color(0xFF2D6A4F),
-                        surface = Color(0xFFFAF9F6)
-                    )
-                ) {
-                    OverlayContent()
+                val isVisible by isOverlayVisible
+                if (isVisible) {
+                    MaterialTheme(
+                        colorScheme = lightColorScheme(
+                            primary = Color(0xFF2D6A4F),
+                            surface = Color(0xFFFAF9F6)
+                        )
+                    ) {
+                        OverlayContent()
+                    }
                 }
             }
         }
 
         windowManager.addView(overlayView, windowParams)
+        observeForegroundApp()
+    }
+
+    private fun observeForegroundApp() {
+        val initialPkg = DittoAccessibilityService.instance?.getActiveForegroundPackage()
+        if (!initialPkg.isNullOrBlank()) {
+            DittoAccessibilityService.updateForegroundPackage(initialPkg)
+        }
+
+        serviceScope.launch {
+            combine(
+                historyManager.isAppFilterEnabledFlow,
+                historyManager.selectedAppPackagesFlow,
+                DittoAccessibilityService.currentForegroundPackage
+            ) { isFilterEnabled, selectedApps, currentPackage ->
+                Triple(isFilterEnabled, selectedApps, currentPackage)
+            }.collect { (isFilterEnabled, selectedApps, currentPackage) ->
+                android.util.Log.d("DittoDebug", "Evaluating: filterEnabled=$isFilterEnabled, currentPkg=$currentPackage, selectedCount=${selectedApps.size}")
+                evaluateOverlayVisibility(isFilterEnabled, selectedApps, currentPackage)
+            }
+        }
+    }
+
+    private fun evaluateOverlayVisibility(
+        isFilterEnabled: Boolean,
+        selectedApps: Set<String>,
+        currentPackage: String?
+    ) {
+        val isServiceRunning = DittoAccessibilityService.instance != null
+        val isOverlayActive = overlayState.value != OverlayUiState.COLLAPSED
+
+        val shouldBeVisible = AppFilterPolicy.shouldShowOverlay(
+            isFilterEnabled = isFilterEnabled,
+            selectedPackages = selectedApps,
+            currentPackage = currentPackage,
+            isAccessibilityServiceRunning = isServiceRunning,
+            isOverlayActive = isOverlayActive
+        )
+        android.util.Log.d("DittoDebug", "shouldBeVisible=$shouldBeVisible, isOverlayActive=$isOverlayActive, isFilterEnabled=$isFilterEnabled, isServiceRunning=$isServiceRunning, currentPackage=$currentPackage")
+        updateOverlayVisibility(shouldBeVisible)
+    }
+
+    private fun updateOverlayVisibility(visible: Boolean) {
+        android.util.Log.d("DittoDebug", "updateOverlayVisibility: visible=$visible, previous=${isOverlayVisible.value}")
+        isOverlayVisible.value = visible
+
+        if (::overlayView.isInitialized) {
+            if (visible) {
+                windowParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                windowParams.alpha = 1f
+            } else {
+                windowParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                windowParams.alpha = 0f
+            }
+            try {
+                windowManager.updateViewLayout(overlayView, windowParams)
+                overlayView.requestLayout()
+            } catch (e: Exception) {
+                android.util.Log.e("DittoDebug", "Error updating view layout", e)
+            }
+        }
+    }
+
+    private fun collapseOverlay() {
+        overlayState.value = OverlayUiState.COLLAPSED
+        evaluateOverlayVisibility(
+            historyManager.isAppFilterEnabled,
+            historyManager.selectedAppPackages,
+            DittoAccessibilityService.currentForegroundPackage.value
+        )
     }
 
     private fun startForegroundNotification() {
@@ -285,12 +376,12 @@ class FloatingBubbleService : Service() {
                                                 format = historyManager.selectedFormat,
                                                 historyManager = historyManager
                                             )
-                                            overlayState.value = OverlayUiState.COLLAPSED
+                                            collapseOverlay()
                                         } else {
                                             overlayState.value = OverlayUiState.REVIEW_AND_FILTER
                                         }
                                     } else {
-                                        overlayState.value = OverlayUiState.COLLAPSED
+                                        collapseOverlay()
                                     }
                                 },
                                 modifier = Modifier
@@ -311,7 +402,7 @@ class FloatingBubbleService : Service() {
                             IconButton(
                                 onClick = {
                                     recorderEngine.cancelRecording()
-                                    overlayState.value = OverlayUiState.COLLAPSED
+                                    collapseOverlay()
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
@@ -375,7 +466,7 @@ class FloatingBubbleService : Service() {
                                     IconButton(
                                         onClick = {
                                             playerHelper.stop()
-                                            overlayState.value = OverlayUiState.COLLAPSED
+                                            collapseOverlay()
                                         },
                                         modifier = Modifier.size(30.dp)
                                     ) {
@@ -453,7 +544,7 @@ class FloatingBubbleService : Service() {
                                                 format = historyManager.selectedFormat,
                                                 historyManager = historyManager
                                             )
-                                            overlayState.value = OverlayUiState.COLLAPSED
+                                            collapseOverlay()
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(
@@ -488,7 +579,7 @@ class FloatingBubbleService : Service() {
                                                 selectedFilter.value,
                                                 historyManager.selectedFormat
                                             )
-                                            overlayState.value = OverlayUiState.COLLAPSED
+                                            collapseOverlay()
                                         }
                                     },
                                     colors = ButtonDefaults.filledTonalButtonColors(
@@ -516,6 +607,8 @@ class FloatingBubbleService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
+        serviceJob.cancel()
         playerHelper.stop()
         recorderEngine.cancelRecording()
         lifecycleOwner.onDestroy()

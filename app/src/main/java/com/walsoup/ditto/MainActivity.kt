@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
@@ -106,6 +107,7 @@ import com.walsoup.ditto.theme.SoftSage
 import com.walsoup.ditto.theme.SoftSageLow
 import com.walsoup.ditto.theme.DittoTheme
 import com.walsoup.ditto.theme.WarmTerracotta
+import com.walsoup.ditto.ui.AppSelectionDialog
 import com.walsoup.ditto.ui.HistoryScreen
 import com.walsoup.ditto.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
@@ -236,7 +238,13 @@ fun RecorderScreen(
     var hasOverlayPermission by remember { mutableStateOf(Settings.canDrawOverlays(context)) }
     var hasAccessibilityPermission by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
     var hasNotificationPermission by remember { mutableStateOf(isNotificationPermissionGranted(context)) }
-    var isServiceRunning by remember { mutableStateOf(false) }
+    var isServiceRunning by remember {
+        mutableStateOf(FloatingBubbleService.isRunning || historyManager.isFloatingServiceEnabled)
+    }
+    var showAppSelectionDialog by remember { mutableStateOf(false) }
+
+    val isAppFilterEnabled by historyManager.isAppFilterEnabledFlow.collectAsState()
+    val selectedPackages by historyManager.selectedAppPackagesFlow.collectAsState()
 
     val isRecording by recorderEngine.isRecording.collectAsState()
     val isPlaying by playerHelper.isPlaying.collectAsState()
@@ -266,6 +274,16 @@ fun RecorderScreen(
                 hasOverlayPermission = Settings.canDrawOverlays(context)
                 hasAccessibilityPermission = isAccessibilityServiceEnabled(context)
                 hasNotificationPermission = isNotificationPermissionGranted(context)
+
+                if (historyManager.isFloatingServiceEnabled && hasOverlayPermission && hasMicPermission && !FloatingBubbleService.isRunning) {
+                    val serviceIntent = Intent(context, FloatingBubbleService::class.java)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(serviceIntent)
+                    } else {
+                        context.startService(serviceIntent)
+                    }
+                }
+                isServiceRunning = FloatingBubbleService.isRunning || historyManager.isFloatingServiceEnabled
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -452,86 +470,128 @@ fun RecorderScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(SageContainerLow),
-                            contentAlignment = Alignment.Center
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Layers,
-                                contentDescription = null,
-                                tint = SagePrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(SageContainerLow),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Layers,
+                                    contentDescription = null,
+                                    tint = SagePrimary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Floating Quick-Record",
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 15.sp,
+                                    color = SageText
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = if (isAppFilterEnabled) {
+                                        "Overlay active only in ${selectedPackages.size} selected app(s)"
+                                    } else {
+                                        "Overlay button sits on screen edge across all apps"
+                                    },
+                                    fontSize = 12.sp,
+                                    color = SageSubtext,
+                                    lineHeight = 16.sp
+                                )
+                            }
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                text = "Floating Quick-Record",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 15.sp,
-                                color = SageText
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Switch(
+                            checked = isServiceRunning,
+                            onCheckedChange = { enable ->
+                                if (enable) {
+                                    if (!hasOverlayPermission) {
+                                        val intent = Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            Uri.parse("package:${context.packageName}")
+                                        )
+                                        context.startActivity(intent)
+                                        return@Switch
+                                    }
+                                    if (!hasMicPermission) {
+                                        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        return@Switch
+                                    }
+
+                                    historyManager.isFloatingServiceEnabled = true
+                                    val serviceIntent = Intent(context, FloatingBubbleService::class.java)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        context.startForegroundService(serviceIntent)
+                                    } else {
+                                        context.startService(serviceIntent)
+                                    }
+                                    isServiceRunning = true
+                                } else {
+                                    historyManager.isFloatingServiceEnabled = false
+                                    val serviceIntent = Intent(context, FloatingBubbleService::class.java)
+                                    context.stopService(serviceIntent)
+                                    isServiceRunning = false
+                                }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = SagePrimary
                             )
-                            Spacer(modifier = Modifier.height(2.dp))
+                        )
+                    }
+
+                    if (isAppFilterEnabled) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(SageContainerLow)
+                                .clickable { showAppSelectionDialog = true }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Apps,
+                                    contentDescription = null,
+                                    tint = SagePrimary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "${selectedPackages.size} Target Apps Configured",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = SageText
+                                )
+                            }
                             Text(
-                                text = "Overlay button sits on screen edge across all apps",
+                                text = "Edit",
                                 fontSize = 12.sp,
-                                color = SageSubtext,
-                                lineHeight = 16.sp
+                                fontWeight = FontWeight.SemiBold,
+                                color = SagePrimary
                             )
                         }
                     }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Switch(
-                        checked = isServiceRunning,
-                        onCheckedChange = { enable ->
-                            if (enable) {
-                                if (!hasOverlayPermission) {
-                                    val intent = Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                    context.startActivity(intent)
-                                    return@Switch
-                                }
-                                if (!hasMicPermission) {
-                                    micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    return@Switch
-                                }
-
-                                val serviceIntent = Intent(context, FloatingBubbleService::class.java)
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    context.startForegroundService(serviceIntent)
-                                } else {
-                                    context.startService(serviceIntent)
-                                }
-                                isServiceRunning = true
-                            } else {
-                                val serviceIntent = Intent(context, FloatingBubbleService::class.java)
-                                context.stopService(serviceIntent)
-                                isServiceRunning = false
-                            }
-                        },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = Color.White,
-                            checkedTrackColor = SagePrimary
-                        )
-                    )
                 }
             }
 
@@ -916,6 +976,13 @@ fun RecorderScreen(
                 }
             }
         }
+    }
+
+    if (showAppSelectionDialog) {
+        AppSelectionDialog(
+            historyManager = historyManager,
+            onDismissRequest = { showAppSelectionDialog = false }
+        )
     }
 }
 

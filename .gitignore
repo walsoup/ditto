@@ -15,3 +15,5 @@ skills-lock.json
 *.jks
 *.keystore
 *.key
+*.apk
+

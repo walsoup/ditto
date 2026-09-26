@@ -1,8 +1,13 @@
 package com.walsoup.ditto.ui
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
+import androidx.core.content.ContextCompat
+import com.walsoup.ditto.service.FloatingBubbleService
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Description
@@ -40,12 +46,14 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -60,8 +68,10 @@ import com.walsoup.ditto.SageContainerLow
 import com.walsoup.ditto.SagePrimary
 import com.walsoup.ditto.SageSubtext
 import com.walsoup.ditto.SageText
+import com.walsoup.ditto.TerracottaDot
 import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.data.HistoryManager
+import com.walsoup.ditto.isAccessibilityServiceEnabled
 
 @Composable
 fun SettingsScreen(
@@ -70,6 +80,9 @@ fun SettingsScreen(
     val context = LocalContext.current
     var selectedFormat by remember { mutableStateOf(historyManager.selectedFormat) }
     var isAutoPasteEnabled by remember { mutableStateOf(historyManager.isAutoPasteEnabled) }
+    var isAppFilterEnabled by remember { mutableStateOf(historyManager.isAppFilterEnabled) }
+    val selectedPackages by historyManager.selectedAppPackagesFlow.collectAsState()
+    var showAppSelectionDialog by remember { mutableStateOf(false) }
     var showMitLicenseDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
 
@@ -243,6 +256,130 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Manage Accessibility Service", fontSize = 12.sp, color = SagePrimary)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 3. Target Apps Filter Card
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = SageCard),
+            border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Apps,
+                                contentDescription = null,
+                                tint = SagePrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Target Apps Filter",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 15.sp,
+                                color = SageText
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Only show the floating bubble inside your chosen apps",
+                            fontSize = 12.sp,
+                            color = SageSubtext
+                        )
+                    }
+
+                    Switch(
+                        checked = isAppFilterEnabled,
+                        onCheckedChange = { enabled ->
+                            isAppFilterEnabled = enabled
+                            historyManager.isAppFilterEnabled = enabled
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = SagePrimary
+                        )
+                    )
+                }
+
+                if (isAppFilterEnabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(SageContainerLow)
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text(
+                                text = "Active Whitelist",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = SageText
+                            )
+                            Text(
+                                text = "${selectedPackages.size} apps configured",
+                                fontSize = 11.sp,
+                                color = SageSubtext
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { showAppSelectionDialog = true },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Configure Apps", fontSize = 12.sp, color = SagePrimary)
+                        }
+                    }
+
+                    val isAccessibilityOn = isAccessibilityServiceEnabled(context)
+                    if (!isAccessibilityOn) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFFFBF0EC))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.SettingsAccessibility,
+                                contentDescription = null,
+                                tint = TerracottaDot,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Accessibility service required to detect open apps",
+                                fontSize = 11.sp,
+                                color = SageText,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = {
+                                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                    context.startActivity(intent)
+                                }
+                            ) {
+                                Text("Enable", fontSize = 11.sp, color = SagePrimary)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -428,6 +565,13 @@ fun SettingsScreen(
             },
             shape = RoundedCornerShape(16.dp),
             containerColor = SageCard
+        )
+    }
+
+    if (showAppSelectionDialog) {
+        AppSelectionDialog(
+            historyManager = historyManager,
+            onDismissRequest = { showAppSelectionDialog = false }
         )
     }
 }

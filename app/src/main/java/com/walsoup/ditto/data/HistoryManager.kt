@@ -18,6 +18,11 @@ import java.io.File
 
 class HistoryManager(private val context: Context) {
 
+    companion object {
+        private var sharedAppFilterEnabled: MutableStateFlow<Boolean>? = null
+        private var sharedSelectedPackages: MutableStateFlow<Set<String>>? = null
+    }
+
     private val scope = CoroutineScope(Dispatchers.IO)
     private val prefs: SharedPreferences =
         context.getSharedPreferences("ditto_settings", Context.MODE_PRIVATE)
@@ -27,7 +32,35 @@ class HistoryManager(private val context: Context) {
     private val _history = MutableStateFlow<List<HistoryItem>>(emptyList())
     val history: StateFlow<List<HistoryItem>> = _history.asStateFlow()
 
+    private val _isAppFilterEnabled: MutableStateFlow<Boolean> = synchronized(HistoryManager::class.java) {
+        sharedAppFilterEnabled ?: MutableStateFlow(prefs.getBoolean("app_filter_enabled", false)).also {
+            sharedAppFilterEnabled = it
+        }
+    }
+    val isAppFilterEnabledFlow: StateFlow<Boolean> = _isAppFilterEnabled.asStateFlow()
+
+    private val _selectedAppPackages: MutableStateFlow<Set<String>> = synchronized(HistoryManager::class.java) {
+        sharedSelectedPackages ?: MutableStateFlow(
+            prefs.getStringSet("selected_app_packages", emptySet())?.toSet() ?: emptySet()
+        ).also {
+            sharedSelectedPackages = it
+        }
+    }
+    val selectedAppPackagesFlow: StateFlow<Set<String>> = _selectedAppPackages.asStateFlow()
+
+    private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        when (key) {
+            "app_filter_enabled" -> {
+                _isAppFilterEnabled.value = prefs.getBoolean("app_filter_enabled", false)
+            }
+            "selected_app_packages" -> {
+                _selectedAppPackages.value = prefs.getStringSet("selected_app_packages", emptySet())?.toSet() ?: emptySet()
+            }
+        }
+    }
+
     init {
+        prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
         loadHistory()
     }
 
@@ -58,6 +91,46 @@ class HistoryManager(private val context: Context) {
         set(value) {
             prefs.edit().putString("audio_format", value.name).apply()
         }
+
+    var isFloatingServiceEnabled: Boolean
+        get() = prefs.getBoolean("floating_service_enabled", false)
+        set(value) {
+            prefs.edit().putBoolean("floating_service_enabled", value).apply()
+        }
+
+    var isAppFilterEnabled: Boolean
+        get() = _isAppFilterEnabled.value
+        set(value) {
+            _isAppFilterEnabled.value = value
+            prefs.edit().putBoolean("app_filter_enabled", value).apply()
+        }
+
+    var selectedAppPackages: Set<String>
+        get() = _selectedAppPackages.value
+        set(value) {
+            _selectedAppPackages.value = value
+            prefs.edit().putStringSet("selected_app_packages", value).apply()
+        }
+
+    fun toggleAppPackage(packageName: String, isSelected: Boolean) {
+        val current = _selectedAppPackages.value.toMutableSet()
+        if (isSelected) {
+            current.add(packageName)
+        } else {
+            current.remove(packageName)
+        }
+        selectedAppPackages = current
+    }
+
+    fun selectAllApps(packageNames: Collection<String>) {
+        val current = _selectedAppPackages.value.toMutableSet()
+        current.addAll(packageNames)
+        selectedAppPackages = current
+    }
+
+    fun clearAllSelectedApps() {
+        selectedAppPackages = emptySet()
+    }
 
     fun loadHistory() {
         if (!isHistoryEnabled) {

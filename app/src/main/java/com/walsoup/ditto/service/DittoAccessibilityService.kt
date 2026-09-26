@@ -1,23 +1,66 @@
 package com.walsoup.ditto.service
 
 import android.accessibilityservice.AccessibilityService
+import android.content.Context
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.inputmethod.InputMethodManager
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class DittoAccessibilityService : AccessibilityService() {
 
     companion object {
         var instance: DittoAccessibilityService? = null
             private set
+
+        private val _currentForegroundPackage = MutableStateFlow<String?>(null)
+        val currentForegroundPackage: StateFlow<String?> = _currentForegroundPackage.asStateFlow()
+
+        fun updateForegroundPackage(pkg: String) {
+            _currentForegroundPackage.value = pkg
+        }
+    }
+
+    fun getActiveForegroundPackage(): String? {
+        val rootPkg = rootInActiveWindow?.packageName?.toString()
+        if (!rootPkg.isNullOrBlank() && !isIgnoredPackage(rootPkg)) {
+            return rootPkg
+        }
+        return null
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
+        val initialPackage = getActiveForegroundPackage()
+        if (!initialPackage.isNullOrBlank()) {
+            _currentForegroundPackage.value = initialPackage
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Active event stream
+        if (event == null) return
+        val eventType = event.eventType
+        if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+            eventType == AccessibilityEvent.TYPE_VIEW_FOCUSED
+        ) {
+            val eventPkg = event.packageName?.toString()
+            val activePkg = if (!eventPkg.isNullOrBlank() && !isIgnoredPackage(eventPkg)) {
+                eventPkg
+            } else {
+                getActiveForegroundPackage()
+            }
+
+            if (!activePkg.isNullOrBlank() && !isIgnoredPackage(activePkg)) {
+                if (_currentForegroundPackage.value != activePkg) {
+                    android.util.Log.d("DittoDebug", "Foreground package detected: $activePkg")
+                    _currentForegroundPackage.value = activePkg
+                }
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -27,6 +70,24 @@ class DittoAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         instance = null
+    }
+
+    private fun isIgnoredPackage(pkg: String): Boolean {
+        if (pkg == "com.android.systemui") return true
+        if (pkg.contains("permissioncontroller")) return true
+
+        // Ignore active keyboards so typing doesn't switch the detected app
+        try {
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            val imeList = imm?.enabledInputMethodList
+            if (imeList != null) {
+                for (ime in imeList) {
+                    if (ime.packageName == pkg) return true
+                }
+            }
+        } catch (_: Exception) {}
+
+        return false
     }
 
     /**

@@ -23,6 +23,7 @@ object M4aEncoder {
         var codec: MediaCodec? = null
         var muxer: MediaMuxer? = null
         var inputStream: FileInputStream? = null
+        var muxerStarted = false
 
         return try {
             val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, sampleRate, channelCount).apply {
@@ -38,14 +39,14 @@ object M4aEncoder {
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
             inputStream = FileInputStream(inputFile)
+            val channel = inputStream.channel
             // Skip 44-byte WAV header if present
             val probe = ByteArray(4)
-            inputStream.read(probe)
-            if (String(probe) == "RIFF") {
-                inputStream.skip(40) // Remaining 40 bytes of 44-byte WAV header
+            val bytesReadProbe = inputStream.read(probe)
+            if (bytesReadProbe == 4 && String(probe) == "RIFF") {
+                channel.position(44L)
             } else {
-                inputStream.close()
-                inputStream = FileInputStream(inputFile)
+                channel.position(0L)
             }
 
             val bufferInfo = MediaCodec.BufferInfo()
@@ -54,7 +55,6 @@ object M4aEncoder {
             var isOutputDone = false
             var presentationTimeUs = 0L
             var trackIndex = -1
-            var muxerStarted = false
 
             while (!isOutputDone) {
                 if (!isInputDone) {
@@ -96,6 +96,9 @@ object M4aEncoder {
                         muxerStarted = true
                     }
                 } else if (outputBufferIndex >= 0) {
+                    if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
+                        bufferInfo.size = 0
+                    }
                     val outputBuffer = codec.getOutputBuffer(outputBufferIndex)
                     if (outputBuffer != null && bufferInfo.size > 0 && muxerStarted) {
                         outputBuffer.position(bufferInfo.offset)
@@ -118,7 +121,7 @@ object M4aEncoder {
             try { inputStream?.close() } catch (_: Exception) {}
             try { codec?.stop(); codec?.release() } catch (_: Exception) {}
             try {
-                if (muxer != null) {
+                if (muxer != null && muxerStarted) {
                     muxer.stop()
                     muxer.release()
                 }

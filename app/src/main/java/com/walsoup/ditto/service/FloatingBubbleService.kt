@@ -69,6 +69,7 @@ import android.view.View
 import com.walsoup.ditto.MainActivity
 import com.walsoup.ditto.R
 import com.walsoup.ditto.core.audio.AudioFileManager
+import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
 import com.walsoup.ditto.core.audio.VoiceFilter
@@ -368,15 +369,32 @@ class FloatingBubbleService : Service() {
                                         activePlayableFile.value = file
                                         // Auto-paste if enabled: stop recording and directly paste audio!
                                         if (historyManager.isAutoPasteEnabled) {
-                                            AudioFileManager.copyAndRecordToHistory(
-                                                context = this@FloatingBubbleService,
-                                                file = file,
-                                                durationMs = currentDuration,
-                                                filter = VoiceFilter.RAW,
-                                                format = historyManager.selectedFormat,
-                                                historyManager = historyManager
-                                            )
-                                            collapseOverlay()
+                                            val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
+                                                AudioFormatType.M4A
+                                            } else {
+                                                historyManager.selectedFormat
+                                            }
+                                            scope.launch {
+                                                val fileToSend = withContext(Dispatchers.IO) {
+                                                    AudioFileManager.generateFilteredAudio(
+                                                        context = this@FloatingBubbleService,
+                                                        inputFile = file,
+                                                        filter = VoiceFilter.RAW,
+                                                        targetFormat = targetFormat
+                                                    )
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    AudioFileManager.copyAndRecordToHistory(
+                                                        context = this@FloatingBubbleService,
+                                                        file = fileToSend,
+                                                        durationMs = currentDuration,
+                                                        filter = VoiceFilter.RAW,
+                                                        format = targetFormat,
+                                                        historyManager = historyManager
+                                                    )
+                                                    collapseOverlay()
+                                                }
+                                            }
                                         } else {
                                             overlayState.value = OverlayUiState.REVIEW_AND_FILTER
                                         }
@@ -497,13 +515,18 @@ class FloatingBubbleService : Service() {
                                             selectedFilter.value = filter
                                             val original = recordedWavFile.value
                                             if (original != null) {
+                                                val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
+                                                    AudioFormatType.M4A
+                                                } else {
+                                                    historyManager.selectedFormat
+                                                }
                                                 scope.launch {
                                                     val filtered = withContext(Dispatchers.IO) {
                                                         AudioFileManager.generateFilteredAudio(
                                                             this@FloatingBubbleService,
                                                             original,
                                                             filter,
-                                                            historyManager.selectedFormat
+                                                            targetFormat
                                                         )
                                                     }
                                                     activePlayableFile.value = filtered
@@ -527,6 +550,9 @@ class FloatingBubbleService : Service() {
 
                             Spacer(modifier = Modifier.height(12.dp))
 
+                            val currentPkg by DittoAccessibilityService.currentForegroundPackage.collectAsState()
+                            val isWhatsApp = currentPkg?.contains("whatsapp") == true
+
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.fillMaxWidth()
@@ -534,17 +560,57 @@ class FloatingBubbleService : Service() {
                                 Button(
                                     onClick = {
                                         playerHelper.stop()
-                                        val fileToSend = activePlayableFile.value ?: recordedWavFile.value
-                                        if (fileToSend != null) {
-                                            AudioFileManager.copyAndRecordToHistory(
-                                                context = this@FloatingBubbleService,
-                                                file = fileToSend,
-                                                durationMs = recordedDurationMs.value,
-                                                filter = selectedFilter.value,
-                                                format = historyManager.selectedFormat,
-                                                historyManager = historyManager
-                                            )
-                                            collapseOverlay()
+                                        val original = recordedWavFile.value
+                                        val existingPrepared = activePlayableFile.value
+                                        if (original != null) {
+                                            val targetFormat = if (isWhatsApp) AudioFormatType.M4A else historyManager.selectedFormat
+                                            scope.launch {
+                                                val fileToSend = if (existingPrepared != null &&
+                                                    ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
+                                                     (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
+                                                    existingPrepared
+                                                } else {
+                                                    withContext(Dispatchers.IO) {
+                                                        AudioFileManager.generateFilteredAudio(
+                                                            context = this@FloatingBubbleService,
+                                                            inputFile = original,
+                                                            filter = selectedFilter.value,
+                                                            targetFormat = targetFormat
+                                                        )
+                                                    }
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    if (isWhatsApp) {
+                                                        try {
+                                                            val shareIntent = AudioFileManager.createShareIntent(
+                                                                this@FloatingBubbleService,
+                                                                fileToSend
+                                                            ).apply {
+                                                                setPackage(currentPkg)
+                                                            }
+                                                            startActivity(shareIntent)
+                                                            historyManager.addRecording(
+                                                                file = fileToSend,
+                                                                durationMs = recordedDurationMs.value,
+                                                                filter = selectedFilter.value,
+                                                                format = targetFormat
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                        }
+                                                    } else {
+                                                        AudioFileManager.copyAndRecordToHistory(
+                                                            context = this@FloatingBubbleService,
+                                                            file = fileToSend,
+                                                            durationMs = recordedDurationMs.value,
+                                                            filter = selectedFilter.value,
+                                                            format = targetFormat,
+                                                            historyManager = historyManager
+                                                        )
+                                                    }
+                                                    collapseOverlay()
+                                                }
+                                            }
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(
@@ -555,31 +621,59 @@ class FloatingBubbleService : Service() {
                                     modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.ContentCopy,
+                                        imageVector = if (isWhatsApp) Icons.Default.Share else Icons.Default.ContentCopy,
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Paste Audio", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        text = if (isWhatsApp) "Send to WhatsApp" else "Paste Audio",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
                                 }
 
                                 FilledTonalButton(
                                     onClick = {
                                         playerHelper.stop()
-                                        val fileToSend = activePlayableFile.value ?: recordedWavFile.value
-                                        if (fileToSend != null) {
-                                            val shareIntent = AudioFileManager.createShareIntent(
-                                                this@FloatingBubbleService,
-                                                fileToSend
-                                            )
-                                            startActivity(shareIntent)
-                                            historyManager.addRecording(
-                                                fileToSend,
-                                                recordedDurationMs.value,
-                                                selectedFilter.value,
+                                        val original = recordedWavFile.value
+                                        val existingPrepared = activePlayableFile.value
+                                        if (original != null) {
+                                            val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
+                                                AudioFormatType.M4A
+                                            } else {
                                                 historyManager.selectedFormat
-                                            )
-                                            collapseOverlay()
+                                            }
+                                            scope.launch {
+                                                val fileToSend = if (existingPrepared != null &&
+                                                    ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
+                                                     (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
+                                                    existingPrepared
+                                                } else {
+                                                    withContext(Dispatchers.IO) {
+                                                        AudioFileManager.generateFilteredAudio(
+                                                            context = this@FloatingBubbleService,
+                                                            inputFile = original,
+                                                            filter = selectedFilter.value,
+                                                            targetFormat = targetFormat
+                                                        )
+                                                    }
+                                                }
+                                                withContext(Dispatchers.Main) {
+                                                    val shareIntent = AudioFileManager.createShareIntent(
+                                                        this@FloatingBubbleService,
+                                                        fileToSend
+                                                    )
+                                                    startActivity(shareIntent)
+                                                    historyManager.addRecording(
+                                                        file = fileToSend,
+                                                        durationMs = recordedDurationMs.value,
+                                                        filter = selectedFilter.value,
+                                                        format = targetFormat
+                                                    )
+                                                    collapseOverlay()
+                                                }
+                                            }
                                         }
                                     },
                                     colors = ButtonDefaults.filledTonalButtonColors(

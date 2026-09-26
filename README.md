@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.2--alpha-2D6A4F?style=flat-square" alt="Release Version" /></a>
+  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.3--alpha-2D6A4F?style=flat-square" alt="Release Version" /></a>
   <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/apk_size-1.5_MB-2D6A4F?style=flat-square" alt="APK Size" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E8F1EC?style=flat-square&color=2D6A4F&labelColor=E8F1EC" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-Android_7.0%2B-lightgrey?style=flat-square" alt="Platform" />
@@ -27,6 +27,7 @@ No ads. No accounts. No network permissions. 1.5 MB total size.
 ## Highlights
 
 - **Per-App Floating Whitelist**: Choose exactly which apps show the floating recorder via an interactive search-and-check app list. The bubble automatically hides on the home screen or outside your chosen apps.
+- **WhatsApp & Messenger Native Support**: Automatically encodes to compressed `.m4a` (AAC) and routes to native share targets when chatting in WhatsApp without "invalid file" errors.
 - **Edge Floating Bubble**: One-tap voice recording accessible from any application via an overlay dock.
 - **Auto-Paste Assistant**: Built-in accessibility integration copies the audio file and triggers paste into your active input field immediately after capture.
 - **Thumb-Zone Recording Dock**: Ergonomic bottom pill featuring a monospace digital timer, real-time audio amplitude meter, and direct action buttons.
@@ -41,7 +42,7 @@ No ads. No accounts. No network permissions. 1.5 MB total size.
 
 Get the signed standalone APK from GitHub Releases:
 
-👉 **[Download Ditto v0.0.2-alpha APK](https://github.com/walsoup/ditto/releases/download/0.0.2-alpha/ditto-v0.0.2-alpha.apk)** *(1.5 MB)*
+👉 **[Download Ditto v0.0.3-alpha APK](https://github.com/walsoup/ditto/releases/download/0.0.3-alpha/ditto-v0.0.3-alpha.apk)** *(1.5 MB)*
 
 Compatible with Android 7.0 (Nougat / API 24) and higher.
 

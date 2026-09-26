@@ -32,8 +32,11 @@ object AudioFileManager {
             val uri = getAudioContentUri(context, file)
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
-            val mime = if (file.name.endsWith(".m4a")) "audio/mp4" else "audio/wav"
-            val mimeTypes = arrayOf(mime, "audio/*")
+            val mimeTypes = if (file.name.endsWith(".m4a")) {
+                arrayOf("audio/mp4", "audio/aac", "audio/m4a", "audio/x-m4a", "audio/*")
+            } else {
+                arrayOf("audio/wav", "audio/x-wav", "audio/*")
+            }
 
             val clipData = ClipData(
                 ClipDescription(label, mimeTypes),
@@ -41,16 +44,42 @@ object AudioFileManager {
             )
             clipboard.setPrimaryClip(clipData)
 
+            // Explicitly grant read URI permission to the target foreground app to avoid permission errors
+            val activePkg = DittoAccessibilityService.currentForegroundPackage.value
+            if (!activePkg.isNullOrBlank()) {
+                try {
+                    context.grantUriPermission(activePkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (_: Exception) {}
+            }
+            try {
+                context.grantUriPermission("com.whatsapp", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                context.grantUriPermission("com.whatsapp.w4b", uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: Exception) {}
+
             if (autoPaste) {
-                // Allow clipboard buffer to settle then trigger direct paste
+                // Allow clipboard buffer to settle then trigger direct paste (or direct share if in WhatsApp)
                 Handler(Looper.getMainLooper()).postDelayed({
-                    val pasted = DittoAccessibilityService.instance?.performDirectPaste() ?: false
-                    if (pasted) {
-                        Toast.makeText(context, "Audio pasted automatically!", Toast.LENGTH_SHORT).show()
+                    val activePkg = DittoAccessibilityService.currentForegroundPackage.value
+                    if (activePkg?.contains("whatsapp") == true) {
+                        try {
+                            val shareIntent = createShareIntent(context, file).apply {
+                                setPackage(activePkg)
+                            }
+                            context.startActivity(shareIntent)
+                            Toast.makeText(context, "Audio ready to send in WhatsApp", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
-                        Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
+                        val pasted = DittoAccessibilityService.instance?.performDirectPaste() ?: false
+                        if (pasted) {
+                            Toast.makeText(context, "Audio pasted automatically!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                }, 150)
+                }, 200)
             } else {
                 Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
             }
@@ -73,14 +102,21 @@ object AudioFileManager {
         format: AudioFormatType,
         historyManager: com.walsoup.ditto.data.HistoryManager
     ): Boolean {
+        // If target format is M4A but input is WAV, transcode before sending
+        val targetFile = if (format == AudioFormatType.M4A && file.name.endsWith(".wav")) {
+            generateFilteredAudio(context, file, filter, AudioFormatType.M4A)
+        } else {
+            file
+        }
+
         val success = copyAudioToClipboard(
             context = context,
-            file = file,
+            file = targetFile,
             autoPaste = historyManager.isAutoPasteEnabled
         )
         if (success) {
             historyManager.addRecording(
-                file = file,
+                file = targetFile,
                 durationMs = durationMs,
                 filter = filter,
                 format = format

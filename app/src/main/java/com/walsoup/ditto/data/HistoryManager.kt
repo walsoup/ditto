@@ -81,11 +81,11 @@ class HistoryManager(private val context: Context) {
 
     var selectedFormat: AudioFormatType
         get() {
-            val name = prefs.getString("audio_format", AudioFormatType.WAV.name)
+            val name = prefs.getString("audio_format", AudioFormatType.M4A.name)
             return try {
-                AudioFormatType.valueOf(name ?: AudioFormatType.WAV.name)
+                AudioFormatType.valueOf(name ?: AudioFormatType.M4A.name)
             } catch (_: Exception) {
-                AudioFormatType.WAV
+                AudioFormatType.M4A
             }
         }
         set(value) {

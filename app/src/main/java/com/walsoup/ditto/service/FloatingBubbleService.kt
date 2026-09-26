@@ -47,18 +47,24 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.text.font.FontWeight
@@ -66,6 +72,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import android.view.View
+import kotlinx.coroutines.delay
+import com.walsoup.ditto.data.BubbleShape
+import com.walsoup.ditto.data.BubbleSize
+import com.walsoup.ditto.data.BubbleTheme
 import com.walsoup.ditto.MainActivity
 import com.walsoup.ditto.R
 import com.walsoup.ditto.core.audio.AudioFileManager
@@ -275,6 +285,23 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    private fun snapToEdge(bubbleSizeDp: androidx.compose.ui.unit.Dp) {
+        val displayMetrics = resources.displayMetrics
+        val screenWidth = displayMetrics.widthPixels
+        val bubblePx = (bubbleSizeDp.value * displayMetrics.density).toInt()
+        val marginPx = (16 * displayMetrics.density).toInt()
+        val midPoint = windowParams.x + bubblePx / 2
+        val targetX = if (midPoint < screenWidth / 2) {
+            marginPx
+        } else {
+            (screenWidth - bubblePx - marginPx).coerceAtLeast(marginPx)
+        }
+        windowParams.x = targetX
+        try {
+            windowManager.updateViewLayout(overlayView, windowParams)
+        } catch (_: Exception) {}
+    }
+
     @Composable
     private fun RecordingBubbleTimer(durationFlow: kotlinx.coroutines.flow.StateFlow<Long>) {
         val durationMs by durationFlow.collectAsState()
@@ -294,28 +321,80 @@ class FloatingBubbleService : Service() {
         val isPlaying by playerHelper.isPlaying.collectAsState()
         val scope = rememberCoroutineScope()
 
+        val bubbleSize by historyManager.bubbleSizeFlow.collectAsState()
+        val bubbleShape by historyManager.bubbleShapeFlow.collectAsState()
+        val bubbleTheme by historyManager.bubbleThemeFlow.collectAsState()
+        val bubbleOpacity by historyManager.bubbleOpacityFlow.collectAsState()
+        val bubbleIdleDim by historyManager.bubbleIdleDimFlow.collectAsState()
+        val bubbleSnapToEdge by historyManager.bubbleSnapToEdgeFlow.collectAsState()
+
+        var isInteracting by remember { mutableStateOf(false) }
+        var isIdle by remember { mutableStateOf(false) }
+
+        LaunchedEffect(state, isInteracting, bubbleIdleDim) {
+            if (state == OverlayUiState.COLLAPSED && bubbleIdleDim && !isInteracting) {
+                delay(3500)
+                isIdle = true
+            } else {
+                isIdle = false
+            }
+        }
+
+        val targetAlpha = if (state == OverlayUiState.COLLAPSED) {
+            if (isIdle) {
+                (bubbleOpacity * 0.38f).coerceAtLeast(0.18f)
+            } else {
+                bubbleOpacity
+            }
+        } else {
+            1.0f
+        }
+
+        val animatedAlpha by animateFloatAsState(
+            targetValue = targetAlpha,
+            animationSpec = tween(durationMillis = 300),
+            label = "bubbleAlpha"
+        )
+
         Box(
             modifier = Modifier
                 .padding(6.dp)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        updateWindowPosition(dragAmount.x, dragAmount.y)
-                    }
+                .pointerInput(bubbleSnapToEdge, bubbleSize) {
+                    detectDragGestures(
+                        onDragStart = {
+                            isInteracting = true
+                        },
+                        onDragEnd = {
+                            isInteracting = false
+                            if (bubbleSnapToEdge && overlayState.value == OverlayUiState.COLLAPSED) {
+                                snapToEdge(bubbleSize.sizeDp)
+                            }
+                        },
+                        onDragCancel = {
+                            isInteracting = false
+                        },
+                        onDrag = { change, dragAmount ->
+                            change.consume()
+                            isInteracting = true
+                            updateWindowPosition(dragAmount.x, dragAmount.y)
+                        }
+                    )
                 }
         ) {
             when (state) {
                 OverlayUiState.COLLAPSED -> {
-                    // Simple pastel sage circle
+                    val shape = bubbleShape.getShape(bubbleSize.sizeDp)
                     Surface(
-                        shape = CircleShape,
-                        shadowElevation = 5.dp,
-                        color = Color(0xFFE8F1EC),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0E6E2)),
+                        shape = shape,
+                        shadowElevation = (4.dp * animatedAlpha).coerceAtLeast(0.dp),
+                        color = bubbleTheme.containerColor,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, bubbleTheme.borderColor),
                         modifier = Modifier
-                            .size(54.dp)
-                            .clip(CircleShape)
+                            .size(bubbleSize.sizeDp)
+                            .graphicsLayer { alpha = animatedAlpha }
+                            .clip(shape)
                             .clickable {
+                                isInteracting = true
                                 val started = recorderEngine.startRecording()
                                 if (started) {
                                     overlayState.value = OverlayUiState.RECORDING
@@ -326,8 +405,8 @@ class FloatingBubbleService : Service() {
                             Icon(
                                 imageVector = Icons.Default.Mic,
                                 contentDescription = "Record",
-                                tint = Color(0xFF2D6A4F),
-                                modifier = Modifier.size(24.dp)
+                                tint = bubbleTheme.iconColor,
+                                modifier = Modifier.size(bubbleSize.iconSizeDp)
                             )
                         }
                     }

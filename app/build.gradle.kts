@@ -1,7 +1,17 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.compose.compiler)
   alias(libs.plugins.kotlin.serialization)
+}
+
+val envProperties = Properties().apply {
+    val envFile = rootProject.file(".env")
+    if (envFile.exists()) {
+        FileInputStream(envFile).use { load(it) }
+    }
 }
 
 android {
@@ -12,12 +22,39 @@ android {
         minSdk = 24
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.0.1-alpha"
+        resourceConfigurations += setOf("en")
+    }
+
+    signingConfigs {
+        create("release") {
+            val keyStorePath = envProperties.getProperty("KEYSTORE_PATH") ?: System.getenv("KEYSTORE_PATH")
+            val keyStorePass = envProperties.getProperty("KEYSTORE_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD")
+            val keyAliasStr = envProperties.getProperty("KEY_ALIAS") ?: System.getenv("KEY_ALIAS")
+            val keyPassStr = envProperties.getProperty("KEY_PASSWORD") ?: System.getenv("KEY_PASSWORD")
+
+            if (keyStorePath != null && keyStorePass != null && keyAliasStr != null && keyPassStr != null) {
+                val cleanPath = keyStorePath.removePrefix("../")
+                storeFile = if (cleanPath.startsWith("/")) file(cleanPath) else rootProject.file(cleanPath)
+                storePassword = keyStorePass
+                keyAlias = keyAliasStr
+                keyPassword = keyPassStr
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning?.storeFile?.exists() == true) {
+                signingConfig = releaseSigning
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
@@ -35,6 +72,8 @@ android {
     packaging {
       resources {
         excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        excludes += "/META-INF/*.version"
+        excludes += "/META-INF/INDEX.LIST"
       }
     }
 }

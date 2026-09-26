@@ -11,3 +11,7 @@ local.properties
 .kotlin
 .agents/
 skills-lock.json
+.env
+*.jks
+*.keystore
+*.key

@@ -38,30 +38,6 @@
         android:strokeLineCap="round"
         android:pathData="M46,66 L62,66" />
 
-    <!-- Audio Waveform Bars (Left) -->
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M38,45 L38,53" />
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M34,47 L34,51" />
-
-    <!-- Audio Waveform Bars (Right) -->
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M70,45 L70,53" />
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M74,47 L74,51" />
-
     <!-- Terracotta Recording Dot Accent -->
     <path
         android:fillColor="#D47255"

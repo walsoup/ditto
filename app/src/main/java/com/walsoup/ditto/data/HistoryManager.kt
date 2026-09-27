@@ -27,6 +27,7 @@ class HistoryManager(private val context: Context) {
         private var sharedBubbleTheme: MutableStateFlow<BubbleTheme>? = null
         private var sharedBubbleIdleDim: MutableStateFlow<Boolean>? = null
         private var sharedBubbleSnapToEdge: MutableStateFlow<Boolean>? = null
+        private var sharedVolumeKeyShortcutEnabled: MutableStateFlow<Boolean>? = null
     }
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -102,6 +103,13 @@ class HistoryManager(private val context: Context) {
     }
     val bubbleSnapToEdgeFlow: StateFlow<Boolean> = _bubbleSnapToEdge.asStateFlow()
 
+    private val _volumeKeyShortcutEnabled: MutableStateFlow<Boolean> = synchronized(HistoryManager::class.java) {
+        sharedVolumeKeyShortcutEnabled ?: MutableStateFlow(prefs.getBoolean("volume_key_shortcut_enabled", false)).also {
+            sharedVolumeKeyShortcutEnabled = it
+        }
+    }
+    val volumeKeyShortcutEnabledFlow: StateFlow<Boolean> = _volumeKeyShortcutEnabled.asStateFlow()
+
     private val prefChangeListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
             "app_filter_enabled" -> {
@@ -130,6 +138,9 @@ class HistoryManager(private val context: Context) {
             }
             "bubble_snap_to_edge" -> {
                 _bubbleSnapToEdge.value = prefs.getBoolean("bubble_snap_to_edge", true)
+            }
+            "volume_key_shortcut_enabled" -> {
+                _volumeKeyShortcutEnabled.value = prefs.getBoolean("volume_key_shortcut_enabled", false)
             }
         }
     }
@@ -220,6 +231,13 @@ class HistoryManager(private val context: Context) {
         set(value) {
             _bubbleSnapToEdge.value = value
             prefs.edit().putBoolean("bubble_snap_to_edge", value).apply()
+        }
+
+    var isVolumeKeyShortcutEnabled: Boolean
+        get() = _volumeKeyShortcutEnabled.value
+        set(value) {
+            _volumeKeyShortcutEnabled.value = value
+            prefs.edit().putBoolean("volume_key_shortcut_enabled", value).apply()
         }
 
     var selectedAppPackages: Set<String>

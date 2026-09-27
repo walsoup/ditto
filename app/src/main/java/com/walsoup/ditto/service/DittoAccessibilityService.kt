@@ -2,9 +2,11 @@ package com.walsoup.ditto.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.inputmethod.InputMethodManager
+import com.walsoup.ditto.data.HistoryManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -61,6 +63,32 @@ class DittoAccessibilityService : AccessibilityService() {
                 }
             }
         }
+    }
+
+    private var lastVolumeDownTime = 0L
+    private val doubleClickThresholdMs = 450L
+
+    override fun onKeyEvent(event: KeyEvent?): Boolean {
+        if (event == null) return false
+
+        val historyManager = HistoryManager(this)
+        if (!historyManager.isVolumeKeyShortcutEnabled) {
+            return super.onKeyEvent(event)
+        }
+
+        if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
+            val now = System.currentTimeMillis()
+            if (now - lastVolumeDownTime <= doubleClickThresholdMs) {
+                lastVolumeDownTime = 0L
+                android.util.Log.d("DittoDebug", "Volume down double press triggered recording toggle")
+                FloatingBubbleService.toggleRecording(this)
+                return true
+            } else {
+                lastVolumeDownTime = now
+            }
+        }
+
+        return super.onKeyEvent(event)
     }
 
     override fun onInterrupt() {

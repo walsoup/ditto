@@ -32,9 +32,9 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Gavel
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.SettingsAccessibility
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -99,6 +99,7 @@ fun SettingsScreen(
     val bubbleTheme by historyManager.bubbleThemeFlow.collectAsState()
     val bubbleIdleDim by historyManager.bubbleIdleDimFlow.collectAsState()
     val bubbleSnapToEdge by historyManager.bubbleSnapToEdgeFlow.collectAsState()
+    val volumeKeyShortcutEnabled by historyManager.volumeKeyShortcutEnabledFlow.collectAsState()
     var showAppSelectionDialog by remember { mutableStateOf(false) }
     var showMitLicenseDialog by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
@@ -134,7 +135,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.VolumeUp,
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
                         contentDescription = null,
                         tint = SagePrimary,
                         modifier = Modifier.size(20.dp)
@@ -754,6 +755,132 @@ fun SettingsScreen(
                             checkedTrackColor = SagePrimary
                         )
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // 5. Quick Triggers & Hardware Shortcuts Card
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(containerColor = SageCard),
+            border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                        contentDescription = null,
+                        tint = SagePrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Quick Triggers & Shortcuts",
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 15.sp,
+                        color = SageText
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Control recording without touching the screen.",
+                    fontSize = 12.sp,
+                    color = SageSubtext
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Volume Key Double-Tap
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Double-Tap Volume Down",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = SageText
+                        )
+                        Text(
+                            text = "Quickly tap Volume Down twice to start or stop recording",
+                            fontSize = 11.sp,
+                            color = SageSubtext
+                        )
+                    }
+                    Switch(
+                        checked = volumeKeyShortcutEnabled,
+                        onCheckedChange = { historyManager.isVolumeKeyShortcutEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = SagePrimary
+                        )
+                    )
+                }
+
+                val isAccessibilityOn = isAccessibilityServiceEnabled(context)
+                if (volumeKeyShortcutEnabled && !isAccessibilityOn) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFFFBF0EC))
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SettingsAccessibility,
+                            contentDescription = null,
+                            tint = TerracottaDot,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Accessibility service required to detect volume button presses",
+                            fontSize = 11.sp,
+                            color = SageText,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text("Enable", fontSize = 11.sp, color = SagePrimary)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Quick Settings Tile guide
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = SageContainerLow,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Quick Settings Tile",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SagePrimary
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Swipe down your Android notification shade, tap Edit, and add 'Ditto Recorder' for 1-tap toggling anytime.",
+                            fontSize = 11.sp,
+                            color = SageText
+                        )
+                    }
                 }
             }
         }

@@ -11,6 +11,12 @@ on:
         options:
           - release
           - debug
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+      - '*.*.*-alpha'
 
 permissions:
   contents: read
@@ -36,7 +42,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Configure Keystore from Secrets (if provided)
-        if: ${{ inputs.build_type == 'release' }}
+        if: ${{ github.event_name == 'push' || inputs.build_type == 'release' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -55,16 +61,16 @@ jobs:
           fi
 
       - name: Build Release APK
-        if: ${{ inputs.build_type == 'release' }}
+        if: ${{ github.event_name == 'push' || inputs.build_type == 'release' }}
         run: ./gradlew assembleRelease
 
       - name: Build Debug APK
-        if: ${{ inputs.build_type == 'debug' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' }}
         run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ditto-${{ inputs.build_type }}-apk
-          path: app/build/outputs/apk/${{ inputs.build_type }}/*.apk
+          name: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' && 'ditto-debug-apk' || 'ditto-release-apk' }}
+          path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error

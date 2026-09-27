@@ -46,6 +46,18 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- Quick Settings Tile Service -->
+        <service
+            android:name=".service.DittoTileService"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.TileService" />
+            </intent-filter>
+        </service>
+
         <!-- FileProvider for sharing audio files securely with other apps -->
         <provider
             android:name="androidx.core.content.FileProvider"

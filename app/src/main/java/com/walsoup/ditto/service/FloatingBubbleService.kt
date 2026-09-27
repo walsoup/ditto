@@ -96,8 +96,31 @@ import java.io.File
 class FloatingBubbleService : Service() {
 
     companion object {
+        const val EXTRA_AUTO_RECORD = "com.walsoup.ditto.EXTRA_AUTO_RECORD"
+
         var isRunning: Boolean = false
             private set
+
+        var instance: FloatingBubbleService? = null
+            private set
+
+        fun toggleRecording(context: Context) {
+            val current = instance
+            if (current != null) {
+                current.performToggleRecording()
+            } else {
+                if (android.provider.Settings.canDrawOverlays(context)) {
+                    val intent = Intent(context, FloatingBubbleService::class.java).apply {
+                        putExtra(EXTRA_AUTO_RECORD, true)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        context.startForegroundService(intent)
+                    } else {
+                        context.startService(intent)
+                    }
+                }
+            }
+        }
     }
 
     private val serviceJob = SupervisorJob()
@@ -139,6 +162,8 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
         isRunning = true
+        instance = this
+        DittoTileService.updateTile(this)
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         recorderEngine = AudioRecorderEngine(this)
         playerHelper = AudioPlayerHelper(this)
@@ -240,6 +265,84 @@ class FloatingBubbleService : Service() {
             historyManager.selectedAppPackages,
             DittoAccessibilityService.currentForegroundPackage.value
         )
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getBooleanExtra(EXTRA_AUTO_RECORD, false) == true) {
+            serviceScope.launch(Dispatchers.Main) {
+                updateOverlayVisibility(true)
+                startRecordingInternal()
+            }
+        }
+        return START_STICKY
+    }
+
+    fun performToggleRecording() {
+        serviceScope.launch(Dispatchers.Main) {
+            when (overlayState.value) {
+                OverlayUiState.COLLAPSED -> {
+                    updateOverlayVisibility(true)
+                    startRecordingInternal()
+                }
+                OverlayUiState.RECORDING -> {
+                    stopRecordingInternal()
+                }
+                OverlayUiState.REVIEW_AND_FILTER -> {
+                    collapseOverlay()
+                }
+            }
+        }
+    }
+
+    private fun startRecordingInternal(): Boolean {
+        val started = recorderEngine.startRecording()
+        if (started) {
+            overlayState.value = OverlayUiState.RECORDING
+        }
+        return started
+    }
+
+    private fun stopRecordingInternal() {
+        val currentDuration = recorderEngine.durationMs.value
+        recordedDurationMs.value = currentDuration
+        val file = recorderEngine.stopRecording()
+        if (file != null && file.exists()) {
+            recordedWavFile.value = file
+            selectedFilter.value = VoiceFilter.RAW
+            activePlayableFile.value = file
+            if (historyManager.isAutoPasteEnabled) {
+                val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
+                    AudioFormatType.M4A
+                } else {
+                    historyManager.selectedFormat
+                }
+                serviceScope.launch {
+                    val fileToSend = withContext(Dispatchers.IO) {
+                        AudioFileManager.generateFilteredAudio(
+                            context = this@FloatingBubbleService,
+                            inputFile = file,
+                            filter = VoiceFilter.RAW,
+                            targetFormat = targetFormat
+                        )
+                    }
+                    withContext(Dispatchers.Main) {
+                        AudioFileManager.copyAndRecordToHistory(
+                            context = this@FloatingBubbleService,
+                            file = fileToSend,
+                            durationMs = currentDuration,
+                            filter = VoiceFilter.RAW,
+                            format = targetFormat,
+                            historyManager = historyManager
+                        )
+                        collapseOverlay()
+                    }
+                }
+            } else {
+                overlayState.value = OverlayUiState.REVIEW_AND_FILTER
+            }
+        } else {
+            collapseOverlay()
+        }
     }
 
     private fun startForegroundNotification() {
@@ -395,10 +498,7 @@ class FloatingBubbleService : Service() {
                             .clip(shape)
                             .clickable {
                                 isInteracting = true
-                                val started = recorderEngine.startRecording()
-                                if (started) {
-                                    overlayState.value = OverlayUiState.RECORDING
-                                }
+                                startRecordingInternal()
                             }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -439,47 +539,7 @@ class FloatingBubbleService : Service() {
 
                             IconButton(
                                 onClick = {
-                                    val currentDuration = recorderEngine.durationMs.value
-                                    recordedDurationMs.value = currentDuration
-                                    val file = recorderEngine.stopRecording()
-                                    if (file != null && file.exists()) {
-                                        recordedWavFile.value = file
-                                        selectedFilter.value = VoiceFilter.RAW
-                                        activePlayableFile.value = file
-                                        // Auto-paste if enabled: stop recording and directly paste audio!
-                                        if (historyManager.isAutoPasteEnabled) {
-                                            val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
-                                                AudioFormatType.M4A
-                                            } else {
-                                                historyManager.selectedFormat
-                                            }
-                                            scope.launch {
-                                                val fileToSend = withContext(Dispatchers.IO) {
-                                                    AudioFileManager.generateFilteredAudio(
-                                                        context = this@FloatingBubbleService,
-                                                        inputFile = file,
-                                                        filter = VoiceFilter.RAW,
-                                                        targetFormat = targetFormat
-                                                    )
-                                                }
-                                                withContext(Dispatchers.Main) {
-                                                    AudioFileManager.copyAndRecordToHistory(
-                                                        context = this@FloatingBubbleService,
-                                                        file = fileToSend,
-                                                        durationMs = currentDuration,
-                                                        filter = VoiceFilter.RAW,
-                                                        format = targetFormat,
-                                                        historyManager = historyManager
-                                                    )
-                                                    collapseOverlay()
-                                                }
-                                            }
-                                        } else {
-                                            overlayState.value = OverlayUiState.REVIEW_AND_FILTER
-                                        }
-                                    } else {
-                                        collapseOverlay()
-                                    }
+                                    stopRecordingInternal()
                                 },
                                 modifier = Modifier
                                     .size(32.dp)
@@ -781,6 +841,8 @@ class FloatingBubbleService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        instance = null
+        DittoTileService.updateTile(this)
         serviceJob.cancel()
         playerHelper.stop()
         recorderEngine.cancelRecording()

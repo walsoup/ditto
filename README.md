@@ -1,112 +1,74 @@
 <p align="center">
-  <img src="art/icon.png" width="120" height="120" alt="Ditto App Icon" />
+  <img src="art/icon.png" width="120" height="120" alt="Ditto app icon" />
 </p>
 
 <h1 align="center">Ditto</h1>
 
 <p align="center">
-  <strong>Record voice notes anywhere. Paste them instantly into any chat.</strong>
+  Record a voice note and paste it into any chat on Android, without leaving the app you're in.
 </p>
 
 <p align="center">
-  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.5--alpha-2D6A4F?style=flat-square" alt="Release Version" /></a>
-  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/apk_size-1.5_MB-2D6A4F?style=flat-square" alt="APK Size" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-E8F1EC?style=flat-square&color=2D6A4F&labelColor=E8F1EC" alt="License" /></a>
-  <img src="https://img.shields.io/badge/platform-Android_7.0%2B-lightgrey?style=flat-square" alt="Platform" />
-  <img src="https://img.shields.io/badge/network-100%25_offline-success?style=flat-square" alt="Network Offline" />
+  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.5--alpha-2D6A4F?style=flat-square" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/apk-1.5_MB-2D6A4F?style=flat-square" alt="APK size" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2D6A4F?style=flat-square" alt="License" /></a>
+  <img src="https://img.shields.io/badge/android-7.0%2B-lightgrey?style=flat-square" alt="Android 7.0+" />
 </p>
 
 ---
 
-Ditto is an ultralight, distraction-free voice note assistant for Android. It floats on your screen edge as a minimal bubble. Tap to record, tap to stop—Ditto automatically pastes the audio clip straight into your active chat (Signal, WhatsApp, Telegram, Discord, Slack, SMS) without switching apps.
+Ditto puts a small bubble on the edge of your screen. Tap it to start recording, tap again to stop, and the clip gets pasted into whatever chat you have open. Works in WhatsApp, Telegram, Signal, Discord, Slack and SMS.
 
-No ads. No accounts. No network permissions. 1.5 MB total size.
+It's about 1.5 MB, has no ads, no accounts, and doesn't ask for the internet permission. Your audio stays on your phone.
 
----
+## How to use it
 
-## Highlights
+1. [Install the APK](#install) and open Ditto. Grant the permissions on the checklist (see [Permissions](#permissions)).
+2. Turn the bubble on in the app.
+3. Choose which apps should show the bubble.
+4. Open a chat and tap the bubble to start recording. Tap it again to stop.
+5. The clip gets pasted into the text field. Send it.
 
-- **Quick Settings Tile**: Instant toggle for the floating recorder directly from Android's notification shade.
-- **Hardware Volume Trigger**: Double-tap Volume Down anytime to start or stop recording hands-free without touching the screen.
-- **Floating Bubble Customization**: Complete control over overlay appearance with real-time live preview. Tune opacity / transparency (20%–100%), switch size (Compact, Standard, Comfort), pick shape (Circle, Squircle, Pill), choose pastel color palette (Sage, Linen, Terracotta, Slate), auto-dim on idle, and auto-snap to screen edges.
-- **Per-App Floating Whitelist**: Choose exactly which apps show the floating recorder via an interactive search-and-check app list. The bubble automatically hides on the home screen or outside your chosen apps.
-- **WhatsApp & Messenger Native Support**: Automatically encodes to compressed `.m4a` (AAC) and routes to native share targets when chatting in WhatsApp without "invalid file" errors.
-- **Edge Floating Bubble**: One-tap voice recording accessible from any application via an overlay dock.
-- **Auto-Paste Assistant**: Built-in accessibility integration copies the audio file and triggers paste into your active input field immediately after capture.
-- **Thumb-Zone Recording Dock**: Ergonomic bottom pill featuring a monospace digital timer, real-time audio amplitude meter, and direct action buttons.
-- **8 On-Device Voice Filters**: Real-time DSP profiles including Studio Polish, Cyber Robot, Chipmunk, Deep Titan, Lo-Fi Radio, Echo Chamber, and Fast Rant.
-- **Zero Internet Permissions**: Ditto does not declare `android.permission.INTERNET`. Audio never leaves your physical device.
-- **Featherweight (1.5 MB)**: Optimized with R8 whole-program tree-shaking and resource shrinking.
-- **Flat Pastel Palette**: High-contrast, low-eye-strain Material 3 design using warm linen cream (`#FAF9F6`), soft sage (`#E8F1EC`), and forest accents (`#2D6A4F`).
+## What it does
 
----
+- **Floating bubble.** Sits on the edge of the screen and snaps to it. You can change the size, shape (circle, squircle, pill), color, and opacity, and it dims itself when you're not using it.
+- **Per-app whitelist.** Pick which apps the bubble shows up in. Everywhere else, including the home screen, it stays hidden.
+- **Auto-paste.** When you stop recording, Ditto copies the clip and pastes it into the text field you're in.
+- **WhatsApp works properly.** Clips are encoded as `.m4a` (AAC) so WhatsApp doesn't reject them as invalid files.
+- **Voice filters.** Seven of them, processed on the device: Studio Polish, Cyber Robot, Chipmunk, Deep Titan, Lo-Fi Radio, Echo Chamber, and Fast Rant. Mostly for fun.
 
-## Download
+## Install
 
-Get the signed standalone APK from GitHub Releases:
+Grab the APK from the [releases page](https://github.com/walsoup/ditto/releases/latest). It needs Android 7.0 or newer.
 
-👉 **[Download Ditto v0.0.5-alpha APK](https://github.com/walsoup/ditto/releases/download/0.0.5-alpha/ditto-v0.0.5-alpha.apk)** *(1.5 MB)*
+## Permissions
 
-Compatible with Android 7.0 (Nougat / API 24) and higher.
+Ditto walks you through these on first launch.
 
----
+| Permission | Why |
+|---|---|
+| Microphone | To record. |
+| Display over other apps | To show the bubble on top of your chats. |
+| Accessibility service | To paste the clip into the focused text field after you stop recording. It only triggers a paste. It doesn't read what you type. |
+| Notifications (Android 13+) | Keeps the recorder alive so Android doesn't kill it in the background. |
 
-## Setup & Permissions
+## Build it yourself
 
-Ditto provides an interactive status dashboard on first launch:
-
-| Component | Permission | Why it is needed |
-|---|---|---|
-| **Audio Input** | `RECORD_AUDIO` | Records your voice note through the microphone. |
-| **Floating Dock** | `SYSTEM_ALERT_WINDOW` | Displays the edge recording bubble over other apps. |
-| **Auto-Paste** | `AccessibilityService` | Detects when you stop recording and triggers paste in the active text field. |
-| **Background Service** | `POST_NOTIFICATIONS` | Maintains audio capture state without being killed by Android battery management (Android 13+). |
-
-*Note: The Auto-Paste accessibility service is strictly used to emit standard clipboard paste actions to your focused text field. It does not monitor keystrokes or log user content.*
-
----
-
-## Design System
-
-Ditto uses a strict **60-30-10 Pastel Material 3** visual language:
-
-- **60% Base**: Warm linen cream (`#FAF9F6`) and clean card backgrounds (`#FFFFFF`).
-- **30% Structure**: Soft sage containers (`#E8F1EC`), hairline dividers (`#E0E6E2`), slate text (`#1F2421`).
-- **10% Accent**: Deep forest sage (`#2D6A4F`) for primary triggers, warm terracotta (`#D47255`) for live recording states.
-
-No purple accents, no neon glows, no gradients.
-
----
-
-## Building from Source
-
-### Requirements
-- **JDK 21** (`~/.local/jdk-21` or system path)
-- **Android SDK** (API 36 compile SDK, min SDK 24)
-
-### Steps
+You need JDK 21 and the Android SDK (compile SDK 36, min SDK 24).
 
 ```bash
-# Clone repository
 git clone https://github.com/walsoup/ditto.git
 cd ditto
 
-# Set JDK 21
 export JAVA_HOME="$HOME/.local/jdk-21"
 export PATH="$JAVA_HOME/bin:$PATH"
 
-# Build debug APK
-./gradlew assembleDebug
-
-# Or build optimized release APK (1.18 MB)
-./gradlew assembleRelease
+./gradlew assembleDebug     # debug APK
+./gradlew assembleRelease   # release APK
 ```
 
-Debug APK output: `app/build/outputs/apk/debug/app-debug.apk`  
-Release APK output: `app/build/outputs/apk/release/app-release.apk`
-
----
+Outputs land in `app/build/outputs/apk/debug/` and `app/build/outputs/apk/release/`.
 
 ## License
 
-Distributed under the MIT License. Copyright (c) 2026 **walsoup**. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).

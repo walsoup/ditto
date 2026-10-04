@@ -33,9 +33,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import com.walsoup.ditto.core.util.HapticFeedbackHelper
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -307,11 +309,13 @@ class FloatingBubbleService : Service() {
         val started = recorderEngine.startRecording()
         if (started) {
             overlayState.value = OverlayUiState.RECORDING
+            HapticFeedbackHelper.vibrateStart(this)
         }
         return started
     }
 
     private fun stopRecordingInternal() {
+        HapticFeedbackHelper.vibrateStop(this)
         val currentDuration = recorderEngine.durationMs.value
         recordedDurationMs.value = currentDuration
         val file = recorderEngine.stopRecording()
@@ -522,6 +526,7 @@ class FloatingBubbleService : Service() {
                 }
 
                 OverlayUiState.RECORDING -> {
+                    val isPaused by recorderEngine.isPaused.collectAsState()
                     // Pastel sage recording pill
                     Card(
                         shape = RoundedCornerShape(24.dp),
@@ -537,7 +542,7 @@ class FloatingBubbleService : Service() {
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(WarmTerracotta)
+                                    .background(if (isPaused) MutedIcon else WarmTerracotta)
                             )
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -545,6 +550,25 @@ class FloatingBubbleService : Service() {
                             RecordingBubbleTimer(recorderEngine.durationMs)
 
                             Spacer(modifier = Modifier.width(10.dp))
+
+                            IconButton(
+                                onClick = {
+                                    recorderEngine.togglePause()
+                                },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftSage)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                    contentDescription = if (isPaused) "Resume" else "Pause",
+                                    tint = ForestSage,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(4.dp))
 
                             IconButton(
                                 onClick = {

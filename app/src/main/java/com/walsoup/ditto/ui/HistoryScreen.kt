@@ -255,7 +255,7 @@ fun HistoryScreen(
                                 currentPlayingId = null
                             }
                             val deletedItem = item
-                            historyManager.deleteItem(item.id)
+                            historyManager.stageDeleteItem(item.id)
                             snackbarHostState?.let { host ->
                                 scope.launch {
                                     val result = host.showSnackbar(
@@ -264,12 +264,9 @@ fun HistoryScreen(
                                         duration = SnackbarDuration.Short
                                     )
                                     if (result == SnackbarResult.ActionPerformed) {
-                                        historyManager.addRecording(
-                                            File(deletedItem.filePath),
-                                            deletedItem.durationMs,
-                                            deletedItem.filter,
-                                            deletedItem.format
-                                        )
+                                        historyManager.restoreItem(deletedItem)
+                                    } else {
+                                        historyManager.permanentlyDeleteFile(deletedItem.filePath)
                                     }
                                 }
                             }

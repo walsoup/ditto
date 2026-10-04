@@ -294,6 +294,7 @@ fun RecorderScreen(
     val selectedPackages by historyManager.selectedAppPackagesFlow.collectAsState()
 
     val isRecording by recorderEngine.isRecording.collectAsState()
+    val isPaused by recorderEngine.isPaused.collectAsState()
     val isPlaying by playerHelper.isPlaying.collectAsState()
 
     var recordedAudioFile by remember { mutableStateOf<File?>(null) }
@@ -956,10 +957,18 @@ fun RecorderScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Left: Timer (isolated to prevent parent recomposition)
-            DockTimer(durationFlow = recorderEngine.durationMs, isRecording = isRecording)
+            DockTimer(
+                durationFlow = recorderEngine.durationMs,
+                isRecording = isRecording,
+                isPaused = isPaused
+            )
 
             // Center: Level Meter (isolated to prevent parent recomposition)
-            DockAmplitudeMeter(amplitudeFlow = recorderEngine.amplitude, isRecording = isRecording)
+            DockAmplitudeMeter(
+                amplitudeFlow = recorderEngine.amplitude,
+                isRecording = isRecording,
+                isPaused = isPaused
+            )
 
             // Right: Pill Button
             if (!isRecording) {
@@ -1001,56 +1010,79 @@ fun RecorderScreen(
                     )
                 }
             } else {
-                Button(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val duration = recorderEngine.durationMs.value
-                        lastRecordedDuration = duration
-                        val file = recorderEngine.stopRecording()
-                        if (file != null && file.exists()) {
-                            recordedAudioFile = file
-                            activeAudioFile = file
-                            selectedFilter = VoiceFilter.RAW
-                            // Auto save to history
-                            historyManager.addRecording(
-                                file,
-                                duration,
-                                VoiceFilter.RAW,
-                                historyManager.selectedFormat
-                            )
-                            // If auto-paste is enabled, copy and paste automatically!
-                            if (historyManager.isAutoPasteEnabled) {
-                                AudioFileManager.copyAudioToClipboard(
-                                    context = context,
-                                    file = file,
-                                    autoPaste = true
-                                )
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(22.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = TerracottaDot,
-                        contentColor = Color.White
-                    ),
-                    modifier = Modifier
-                        .height(44.dp)
-                        .width(120.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = "Finish recording",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Done",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
-                        maxLines = 1,
-                        softWrap = false
-                    )
+                    IconButton(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            recorderEngine.togglePause()
+                        },
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(SageContainer)
+                    ) {
+                        Icon(
+                            imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = if (isPaused) "Resume recording" else "Pause recording",
+                            tint = SagePrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val duration = recorderEngine.durationMs.value
+                            lastRecordedDuration = duration
+                            val file = recorderEngine.stopRecording()
+                            if (file != null && file.exists()) {
+                                recordedAudioFile = file
+                                activeAudioFile = file
+                                selectedFilter = VoiceFilter.RAW
+                                // Auto save to history
+                                historyManager.addRecording(
+                                    file,
+                                    duration,
+                                    VoiceFilter.RAW,
+                                    historyManager.selectedFormat
+                                )
+                                // If auto-paste is enabled, copy and paste automatically!
+                                if (historyManager.isAutoPasteEnabled) {
+                                    AudioFileManager.copyAudioToClipboard(
+                                        context = context,
+                                        file = file,
+                                        autoPaste = true
+                                    )
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(22.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = TerracottaDot,
+                            contentColor = Color.White
+                        ),
+                        modifier = Modifier
+                            .height(44.dp)
+                            .width(86.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Finish recording",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Done",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }
@@ -1067,61 +1099,67 @@ if (showAppSelectionDialog) {
 
 @Composable
 fun DockTimer(
-durationFlow: kotlinx.coroutines.flow.StateFlow<Long>,
-isRecording: Boolean
+    durationFlow: kotlinx.coroutines.flow.StateFlow<Long>,
+    isRecording: Boolean,
+    isPaused: Boolean = false
 ) {
-val durationMs by durationFlow.collectAsState()
-val seconds = (durationMs / 1000) % 60
-val minutes = (durationMs / 1000) / 60
-Row(
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
-) {
-    Box(
-        modifier = Modifier
-            .size(10.dp)
-            .clip(CircleShape)
-            .background(if (isRecording) TerracottaDot else InactiveBar)
-    )
-    Text(
-        text = String.format("%02d:%02d", minutes, seconds),
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 17.sp,
-        color = SageText
-    )
-}
+    val durationMs by durationFlow.collectAsState()
+    val seconds = (durationMs / 1000) % 60
+    val minutes = (durationMs / 1000) / 60
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isRecording) {
+                        if (isPaused) MutedIcon else TerracottaDot
+                    } else InactiveBar
+                )
+        )
+        Text(
+            text = String.format("%02d:%02d", minutes, seconds),
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 17.sp,
+            color = SageText
+        )
+    }
 }
 
 @Composable
 fun DockAmplitudeMeter(
-amplitudeFlow: kotlinx.coroutines.flow.StateFlow<Float>,
-isRecording: Boolean
+    amplitudeFlow: kotlinx.coroutines.flow.StateFlow<Float>,
+    isRecording: Boolean,
+    isPaused: Boolean = false
 ) {
-val amplitude by amplitudeFlow.collectAsState()
-Row(
-    horizontalArrangement = Arrangement.spacedBy(3.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    modifier = Modifier.height(20.dp)
-) {
-    repeat(5) { i ->
-        val targetHeight = if (isRecording) {
-            (6 + (amplitude * (i + 1) * 6)).coerceIn(4f, 20f)
-        } else 6f
-        val animatedHeight by animateDpAsState(
-            targetValue = targetHeight.dp,
-            animationSpec = tween(durationMillis = 60),
-            label = "ampBar$i"
-        )
-        Box(
-            modifier = Modifier
-                .width(3.dp)
-                .height(animatedHeight)
-                .clip(RoundedCornerShape(1.5.dp))
-                .background(if (isRecording) SagePrimary else InactiveBar)
-        )
+    val amplitude by amplitudeFlow.collectAsState()
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.height(20.dp)
+    ) {
+        repeat(5) { i ->
+            val targetHeight = if (isRecording && !isPaused) {
+                (6 + (amplitude * (i + 1) * 6)).coerceIn(4f, 20f)
+            } else 6f
+            val animatedHeight by animateDpAsState(
+                targetValue = targetHeight.dp,
+                animationSpec = tween(durationMillis = 60),
+                label = "ampBar$i"
+            )
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(animatedHeight)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(if (isRecording && !isPaused) SagePrimary else InactiveBar)
+            )
+        }
     }
-}
 }
 
 @Composable

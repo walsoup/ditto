@@ -31,6 +31,9 @@ class AudioRecorderEngine(private val context: Context) {
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
 
+    private val _isPaused = MutableStateFlow(false)
+    val isPaused: StateFlow<Boolean> = _isPaused.asStateFlow()
+
     private val _amplitude = MutableStateFlow(0f)
     val amplitude: StateFlow<Float> = _amplitude.asStateFlow()
 
@@ -39,6 +42,11 @@ class AudioRecorderEngine(private val context: Context) {
 
     private var currentPcmFile: File? = null
     private var currentWavFile: File? = null
+
+    @Volatile
+    private var segmentStartTime = 0L
+    @Volatile
+    private var accumulatedDurationMs = 0L
 
     @SuppressLint("MissingPermission")
     fun startRecording(): Boolean {
@@ -72,19 +80,26 @@ class AudioRecorderEngine(private val context: Context) {
 
             audioRecord?.startRecording()
             _isRecording.value = true
+            _isPaused.value = false
+            accumulatedDurationMs = 0L
+            segmentStartTime = System.currentTimeMillis()
             _durationMs.value = 0L
 
             recordingJob = scope.launch {
                 val pcmOut = FileOutputStream(currentPcmFile)
                 val buffer = ShortArray(bufferSize / 2)
                 val byteBuffer = ByteArray(bufferSize)
-                val startTime = System.currentTimeMillis()
                 var lastUiUpdate = 0L
 
                 try {
                     while (isActive && _isRecording.value) {
                         val readCount = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                         if (readCount > 0) {
+                            if (_isPaused.value) {
+                                _amplitude.value = 0f
+                                continue
+                            }
+
                             var sumSquares = 0.0
                             for (i in 0 until readCount) {
                                 val s = buffer[i]
@@ -99,7 +114,7 @@ class AudioRecorderEngine(private val context: Context) {
                                 val rms = sqrt(sumSquares / readCount)
                                 val normalized = (rms / 12000.0).coerceIn(0.0, 1.0).toFloat()
                                 _amplitude.value = normalized
-                                _durationMs.value = now - startTime
+                                _durationMs.value = accumulatedDurationMs + (now - segmentStartTime)
                                 lastUiUpdate = now
                             }
                         }
@@ -119,9 +134,37 @@ class AudioRecorderEngine(private val context: Context) {
         }
     }
 
+    fun pauseRecording() {
+        if (!_isRecording.value || _isPaused.value) return
+        val now = System.currentTimeMillis()
+        accumulatedDurationMs += (now - segmentStartTime)
+        _durationMs.value = accumulatedDurationMs
+        _amplitude.value = 0f
+        _isPaused.value = true
+    }
+
+    fun resumeRecording() {
+        if (!_isRecording.value || !_isPaused.value) return
+        segmentStartTime = System.currentTimeMillis()
+        _isPaused.value = false
+    }
+
+    fun togglePause() {
+        if (_isPaused.value) {
+            resumeRecording()
+        } else {
+            pauseRecording()
+        }
+    }
+
     fun stopRecording(): File? {
         if (!_isRecording.value) return null
+        if (!_isPaused.value) {
+            accumulatedDurationMs += (System.currentTimeMillis() - segmentStartTime)
+        }
+        _durationMs.value = accumulatedDurationMs
         _isRecording.value = false
+        _isPaused.value = false
 
         try {
             audioRecord?.stop()
@@ -152,6 +195,9 @@ class AudioRecorderEngine(private val context: Context) {
 
     fun cancelRecording() {
         _isRecording.value = false
+        _isPaused.value = false
+        accumulatedDurationMs = 0L
+
         try {
             audioRecord?.stop()
             audioRecord?.release()

@@ -351,6 +351,29 @@ class HistoryManager(private val context: Context) {
         addRecording(file, durationMs, filter, format)
     }
 
+    fun stageDeleteItem(id: String): HistoryItem? {
+        val item = _history.value.find { it.id == id } ?: return null
+        val updated = _history.value.filterNot { it.id == id }
+        _history.value = updated
+        saveHistoryToFile(updated)
+        return item
+    }
+
+    fun restoreItem(item: HistoryItem) {
+        if (!isHistoryEnabled) return
+        val updated = (listOf(item) + _history.value.filterNot { it.id == item.id }).sortedByDescending { it.createdAt }
+        _history.value = updated
+        saveHistoryToFile(updated)
+    }
+
+    fun permanentlyDeleteFile(filePath: String) {
+        scope.launch {
+            try {
+                File(filePath).delete()
+            } catch (_: Exception) {}
+        }
+    }
+
     fun deleteItem(id: String) {
         val item = _history.value.find { it.id == id }
         item?.let {

@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.5--alpha-2D6A4F?style=flat-square" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/apk-1.5_MB-2D6A4F?style=flat-square" alt="APK size" />
+  <a href="https://github.com/walsoup/ditto/releases/latest"><img src="https://img.shields.io/badge/release-v0.0.6--alpha-2D6A4F?style=flat-square" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/apk-1.6_MB-2D6A4F?style=flat-square" alt="APK size" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2D6A4F?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/android-7.0%2B-lightgrey?style=flat-square" alt="Android 7.0+" />
 </p>
@@ -19,7 +19,7 @@
 
 Ditto puts a small bubble on the edge of your screen. Tap it to start recording, tap again to stop, and the clip gets pasted into whatever chat you have open. Works in WhatsApp, Telegram, Signal, Discord, Slack and SMS.
 
-It's about 1.5 MB, has no ads, no accounts, and doesn't ask for the internet permission. Your audio stays on your phone.
+It's about 1.6 MB, has no ads, no accounts, and doesn't ask for the internet permission. Your audio stays on your phone.
 
 ## How to use it
 
@@ -40,6 +40,8 @@ It's about 1.5 MB, has no ads, no accounts, and doesn't ask for the internet per
 ## Install
 
 Grab the APK from the [releases page](https://github.com/walsoup/ditto/releases/latest). It needs Android 7.0 or newer.
+
+👉 **[Download Ditto v0.0.6-alpha APK](https://github.com/walsoup/ditto/releases/download/0.0.6-alpha/ditto-v0.0.6-alpha.apk)** *(1.6 MB)*
 
 ## Permissions
 

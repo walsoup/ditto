@@ -76,6 +76,9 @@ import com.walsoup.ditto.SagePrimary
 import com.walsoup.ditto.SageSubtext
 import com.walsoup.ditto.SageText
 import com.walsoup.ditto.TerracottaDot
+import com.walsoup.ditto.theme.PreviewDivider
+import com.walsoup.ditto.theme.PreviewSurface
+import com.walsoup.ditto.theme.TerracottaSoft
 import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.data.BubbleShape
 import com.walsoup.ditto.data.BubbleSize
@@ -83,6 +86,7 @@ import com.walsoup.ditto.data.BubbleTheme
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.isAccessibilityServiceEnabled
 import kotlin.math.roundToInt
+
 
 @Composable
 fun SettingsScreen(
@@ -371,7 +375,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color(0xFFFBF0EC))
+                                .background(TerracottaSoft)
                                 .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -440,7 +444,7 @@ fun SettingsScreen(
                 // Interactive Live Preview
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = Color(0xFFF4F6F4),
+                    color = PreviewSurface,
                     border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -462,21 +466,21 @@ fun SettingsScreen(
                                     .fillMaxWidth(0.85f)
                                     .height(16.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFDFE6E1))
+                                    .background(PreviewDivider)
                             )
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(0.6f)
                                     .height(16.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFDFE6E1))
+                                    .background(PreviewDivider)
                             )
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth(0.95f)
                                     .height(16.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(Color(0xFFDFE6E1))
+                                    .background(PreviewDivider)
                             )
                         }
 
@@ -830,7 +834,7 @@ fun SettingsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFFFBF0EC))
+                            .background(TerracottaSoft)
                             .padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {

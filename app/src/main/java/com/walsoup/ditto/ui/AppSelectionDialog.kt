@@ -76,6 +76,8 @@ import com.walsoup.ditto.SagePrimary
 import com.walsoup.ditto.SageSubtext
 import com.walsoup.ditto.SageText
 import com.walsoup.ditto.TerracottaDot
+import com.walsoup.ditto.theme.TerracottaLine
+import com.walsoup.ditto.theme.TerracottaSoft
 import com.walsoup.ditto.data.AppFilterHelper
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.data.InstalledApp
@@ -299,8 +301,8 @@ fun AppSelectionDialog(
                     Spacer(modifier = Modifier.height(10.dp))
                     Card(
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFBF0EC)),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF2DCD3)),
+                        colors = CardDefaults.cardColors(containerColor = TerracottaSoft),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, TerracottaLine),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(

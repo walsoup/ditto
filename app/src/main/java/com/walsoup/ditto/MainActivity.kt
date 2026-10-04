@@ -9,12 +9,25 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
+import android.graphics.Color as AndroidColor
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,11 +37,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -45,14 +56,12 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SettingsAccessibility
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -60,18 +69,21 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -79,18 +91,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
@@ -98,14 +116,19 @@ import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.service.FloatingBubbleService
 import com.walsoup.ditto.theme.CleanWhite
+import com.walsoup.ditto.theme.DittoTheme
 import com.walsoup.ditto.theme.ForestSage
 import com.walsoup.ditto.theme.HairlineBorder
+import com.walsoup.ditto.theme.InactiveBar
 import com.walsoup.ditto.theme.LinenCream
+import com.walsoup.ditto.theme.MutedIcon
 import com.walsoup.ditto.theme.SlateSubtext
 import com.walsoup.ditto.theme.SlateText
 import com.walsoup.ditto.theme.SoftSage
 import com.walsoup.ditto.theme.SoftSageLow
-import com.walsoup.ditto.theme.DittoTheme
+import com.walsoup.ditto.theme.TerracottaLine
+import com.walsoup.ditto.theme.TerracottaSoft
+import com.walsoup.ditto.theme.TerracottaTint
 import com.walsoup.ditto.theme.WarmTerracotta
 import com.walsoup.ditto.ui.AppSelectionDialog
 import com.walsoup.ditto.ui.HistoryScreen
@@ -113,6 +136,7 @@ import com.walsoup.ditto.ui.SettingsScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 import java.io.File
 
 // Pastel Material 3 Theme Palette (60-30-10) aliases
@@ -140,7 +164,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                AndroidColor.TRANSPARENT,
+                AndroidColor.TRANSPARENT
+            )
+        )
 
         recorderEngine = AudioRecorderEngine(this)
         playerHelper = AudioPlayerHelper(this)
@@ -170,52 +203,66 @@ fun AppRoot(
     playerHelper: AudioPlayerHelper,
     historyManager: HistoryManager
 ) {
-    var selectedTab by remember { mutableStateOf(ScreenTab.RECORDER) }
+    var selectedTab by rememberSaveable { mutableStateOf(ScreenTab.RECORDER) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    BackHandler(enabled = selectedTab != ScreenTab.RECORDER) {
+        selectedTab = ScreenTab.RECORDER
+    }
 
     Scaffold(
         containerColor = SageBg,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            NavigationBar(
-                containerColor = SageCard,
-                tonalElevation = 6.dp,
-                modifier = Modifier.navigationBarsPadding()
-            ) {
-                ScreenTab.values().forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { selectedTab = tab },
-                        icon = {
-                            Icon(
-                                imageVector = tab.icon,
-                                contentDescription = tab.title,
-                                modifier = Modifier.size(20.dp)
+            Column {
+                HorizontalDivider(thickness = 1.dp, color = SageBorder)
+                NavigationBar(
+                    containerColor = SageCard,
+                    tonalElevation = 0.dp
+                ) {
+                    ScreenTab.values().forEach { tab ->
+                        val isSelected = selectedTab == tab
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = { selectedTab = tab },
+                            icon = {
+                                Icon(
+                                    imageVector = tab.icon,
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = tab.title,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = SagePrimary,
+                                selectedTextColor = SagePrimary,
+                                indicatorColor = SageContainer,
+                                unselectedIconColor = SageSubtext,
+                                unselectedTextColor = SageSubtext
                             )
-                        },
-                        label = {
-                            Text(
-                                text = tab.title,
-                                fontSize = 12.sp,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = SagePrimary,
-                            selectedTextColor = SagePrimary,
-                            indicatorColor = SageContainer,
-                            unselectedIconColor = SageSubtext,
-                            unselectedTextColor = SageSubtext
                         )
-                    )
+                    }
                 }
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
-            when (selectedTab) {
-                ScreenTab.RECORDER -> RecorderScreen(recorderEngine, playerHelper, historyManager)
-                ScreenTab.HISTORY -> HistoryScreen(historyManager, playerHelper)
-                ScreenTab.SETTINGS -> SettingsScreen(historyManager)
+            Crossfade(
+                targetState = selectedTab,
+                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+                label = "tabCrossfade"
+            ) { tab ->
+                when (tab) {
+                    ScreenTab.RECORDER -> RecorderScreen(recorderEngine, playerHelper, historyManager)
+                    ScreenTab.HISTORY -> HistoryScreen(historyManager, playerHelper, snackbarHostState)
+                    ScreenTab.SETTINGS -> SettingsScreen(historyManager)
+                }
             }
         }
     }
@@ -344,123 +391,128 @@ fun RecorderScreen(
 
             Spacer(modifier = Modifier.height(18.dp))
 
-            // Permission status boxes: visible whenever any permission is missing
-            if (!allPermissionsGranted) {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = SageCard),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Permissions Setup",
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 15.sp,
-                                    color = SageText
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "Tap any missing permission to enable it",
-                                    fontSize = 12.sp,
-                                    color = SageSubtext
-                                )
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = if (grantedCount == 4) SageContainerLow else Color(0xFFFBF0EC),
-                                border = androidx.compose.foundation.BorderStroke(
-                                    1.dp,
-                                    if (grantedCount == 4) SageBorder else Color(0xFFF2DCD3)
-                                )
+            // Permission status boxes: visible whenever any permission is missing with smooth collapse
+            AnimatedVisibility(
+                visible = !allPermissionsGranted,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = SageCard),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text(
-                                    text = "$grantedCount/4 Ready",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (grantedCount == 4) SagePrimary else TerracottaDot,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Permissions Setup",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 15.sp,
+                                        color = SageText
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Tap any missing permission to enable it",
+                                        fontSize = 12.sp,
+                                        color = SageSubtext
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = if (grantedCount == 4) SageContainerLow else TerracottaSoft,
+                                    border = androidx.compose.foundation.BorderStroke(
+                                        1.dp,
+                                        if (grantedCount == 4) SageBorder else TerracottaLine
+                                    )
+                                ) {
+                                    Text(
+                                        text = "$grantedCount/4 Ready",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (grantedCount == 4) SagePrimary else TerracottaDot,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
 
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // 1. Microphone
-                            PermissionBox(
-                                title = "Microphone",
-                                description = "Required to record voice notes",
-                                isGranted = hasMicPermission,
-                                icon = Icons.Default.Mic,
-                                onClick = {
-                                    if (!hasMicPermission) {
-                                        micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // 1. Microphone
+                                PermissionBox(
+                                    title = "Microphone",
+                                    description = "Required to record voice notes",
+                                    isGranted = hasMicPermission,
+                                    icon = Icons.Default.Mic,
+                                    onClick = {
+                                        if (!hasMicPermission) {
+                                            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
                                     }
-                                }
-                            )
+                                )
 
-                            // 2. Display Overlay
-                            PermissionBox(
-                                title = "Floating Overlay",
-                                description = "Enables quick-record bubble across all apps",
-                                isGranted = hasOverlayPermission,
-                                icon = Icons.Default.Layers,
-                                onClick = {
-                                    if (!hasOverlayPermission) {
-                                        val intent = Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${context.packageName}")
-                                        )
-                                        context.startActivity(intent)
-                                    }
-                                }
-                            )
-
-                            // 3. Auto-Paste (Accessibility)
-                            PermissionBox(
-                                title = "Auto-Paste (Accessibility)",
-                                description = "Directly pastes audio into active chat fields",
-                                isGranted = hasAccessibilityPermission,
-                                icon = Icons.Default.SettingsAccessibility,
-                                onClick = {
-                                    if (!hasAccessibilityPermission) {
-                                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                        context.startActivity(intent)
-                                    }
-                                }
-                            )
-
-                            // 4. Notifications
-                            PermissionBox(
-                                title = "Notifications",
-                                description = "Allows foreground recording service indicator",
-                                isGranted = hasNotificationPermission,
-                                icon = Icons.Default.Notifications,
-                                onClick = {
-                                    if (!hasNotificationPermission) {
-                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                            notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                        } else {
-                                            val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            }
+                                // 2. Display Overlay
+                                PermissionBox(
+                                    title = "Floating Overlay",
+                                    description = "Enables quick-record bubble across all apps",
+                                    isGranted = hasOverlayPermission,
+                                    icon = Icons.Default.Layers,
+                                    onClick = {
+                                        if (!hasOverlayPermission) {
+                                            val intent = Intent(
+                                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                Uri.parse("package:${context.packageName}")
+                                            )
                                             context.startActivity(intent)
                                         }
                                     }
-                                }
-                            )
+                                )
+
+                                // 3. Auto-Paste (Accessibility)
+                                PermissionBox(
+                                    title = "Auto-Paste (Accessibility)",
+                                    description = "Directly pastes audio into active chat fields",
+                                    isGranted = hasAccessibilityPermission,
+                                    icon = Icons.Default.SettingsAccessibility,
+                                    onClick = {
+                                        if (!hasAccessibilityPermission) {
+                                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                            context.startActivity(intent)
+                                        }
+                                    }
+                                )
+
+                                // 4. Notifications
+                                PermissionBox(
+                                    title = "Notifications",
+                                    description = "Allows foreground recording service indicator",
+                                    isGranted = hasNotificationPermission,
+                                    icon = Icons.Default.Notifications,
+                                    onClick = {
+                                        if (!hasNotificationPermission) {
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                            } else {
+                                                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                                }
+                                                context.startActivity(intent)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
+                    Spacer(modifier = Modifier.height(18.dp))
                 }
-
-                Spacer(modifier = Modifier.height(18.dp))
             }
 
             // Floating Quick-Record Card
@@ -505,7 +557,9 @@ fun RecorderScreen(
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = if (isAppFilterEnabled) {
-                                        "Overlay active only in ${selectedPackages.size} selected app(s)"
+                                        val count = selectedPackages.size
+                                        if (count == 1) "Overlay active only in 1 selected app"
+                                        else "Overlay active only in $count selected apps"
                                     } else {
                                         "Overlay button sits on screen edge across all apps"
                                     },
@@ -615,7 +669,7 @@ fun RecorderScreen(
                     Text(
                         text = "• Tap to apply",
                         fontSize = 12.sp,
-                        color = Color(0xFF8A9A90)
+                        color = MutedIcon
                     )
                 }
                 Text(
@@ -688,6 +742,9 @@ fun RecorderScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             // Audio Player & Export Card
+            val currentTargetAudio = activeAudioFile ?: recordedAudioFile
+            val hasAudioTake = currentTargetAudio != null && currentTargetAudio.exists()
+
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = SageCard),
@@ -703,28 +760,32 @@ fun RecorderScreen(
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(SageContainerLow),
+                                .background(if (hasAudioTake) SageContainerLow else SoftSageLow),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Description,
                                 contentDescription = null,
-                                tint = SagePrimary,
+                                tint = if (hasAudioTake) SagePrimary else MutedIcon,
                                 modifier = Modifier.size(18.dp)
                             )
                         }
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            val activeName = activeAudioFile?.name ?: (recordedAudioFile?.name ?: "note_take_01.${historyManager.selectedFormat.extension}")
+                            val activeName = currentTargetAudio?.name ?: "No take recorded yet"
                             Text(
                                 text = activeName,
                                 fontWeight = FontWeight.Medium,
                                 fontSize = 14.sp,
-                                color = SageText
+                                color = if (hasAudioTake) SageText else SageSubtext
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "${selectedFilter.displayName} • ${historyManager.selectedFormat.displayName}",
+                                text = if (hasAudioTake) {
+                                    "${selectedFilter.displayName} • ${historyManager.selectedFormat.displayName}"
+                                } else {
+                                    "Tap Record below to create a voice note"
+                                },
                                 fontSize = 12.sp,
                                 color = SageSubtext
                             )
@@ -733,6 +794,12 @@ fun RecorderScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
+                    val playbackProgress by playerHelper.progressMs.collectAsState()
+                    val totalDuration by playerHelper.durationMs.collectAsState()
+                    val progressFraction = if (totalDuration > 0) {
+                        (playbackProgress.toFloat() / totalDuration.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -740,46 +807,54 @@ fun RecorderScreen(
                     ) {
                         IconButton(
                             onClick = {
-                                val target = activeAudioFile ?: recordedAudioFile
-                                if (target != null) {
-                                    if (isPlaying) playerHelper.pause() else playerHelper.playFile(target)
-                                } else {
-                                    Toast.makeText(context, "Record audio first", Toast.LENGTH_SHORT).show()
+                                if (hasAudioTake) {
+                                    if (isPlaying) {
+                                        playerHelper.pause()
+                                    } else {
+                                        if (playbackProgress > 0) {
+                                            playerHelper.resume()
+                                        } else {
+                                            playerHelper.playFile(currentTargetAudio!!)
+                                        }
+                                    }
                                 }
                             },
+                            enabled = hasAudioTake,
                             modifier = Modifier
-                                .size(36.dp)
+                                .size(40.dp)
                                 .clip(CircleShape)
-                                .background(SagePrimary)
+                                .background(if (hasAudioTake) SagePrimary else InactiveBar)
                         ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
-                                contentDescription = null,
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause preview" else "Play preview",
                                 tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(20.dp)
                             )
                         }
 
-                        Box(
+                        LinearProgressIndicator(
+                            progress = { progressFraction },
                             modifier = Modifier
                                 .weight(1f)
                                 .height(6.dp)
-                                .clip(RoundedCornerShape(3.dp))
-                                .background(SageContainer)
-                        ) {
-                            if (isPlaying) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.5f)
-                                        .height(6.dp)
-                                        .background(SagePrimary)
-                                )
-                            }
-                        }
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = SagePrimary,
+                            trackColor = SageContainer
+                        )
+
+                        val curSec = (playbackProgress / 1000) % 60
+                        val curMin = (playbackProgress / 1000) / 60
+                        val durSec = if (totalDuration > 0) (totalDuration / 1000) % 60 else (lastRecordedDuration / 1000) % 60
+                        val durMin = if (totalDuration > 0) (totalDuration / 1000) / 60 else (lastRecordedDuration / 1000) / 60
 
                         Text(
-                            text = if (isPlaying) "Playing" else "Ready",
-                            fontSize = 12.sp,
+                            text = if (hasAudioTake) {
+                                String.format("%02d:%02d / %02d:%02d", curMin, curSec, durMin, durSec)
+                            } else {
+                                "--:--"
+                            },
+                            fontSize = 11.sp,
                             color = SageSubtext,
                             fontFamily = FontFamily.Monospace
                         )
@@ -793,24 +868,24 @@ fun RecorderScreen(
                     ) {
                         Button(
                             onClick = {
-                                val target = activeAudioFile ?: recordedAudioFile
-                                if (target != null) {
+                                if (hasAudioTake) {
                                     AudioFileManager.copyAndRecordToHistory(
                                         context = context,
-                                        file = target,
+                                        file = currentTargetAudio!!,
                                         durationMs = lastRecordedDuration,
                                         filter = selectedFilter,
                                         format = historyManager.selectedFormat,
                                         historyManager = historyManager
                                     )
-                                } else {
-                                    Toast.makeText(context, "Record audio first", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            enabled = hasAudioTake,
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = SagePrimary,
-                                contentColor = Color.White
+                                contentColor = Color.White,
+                                disabledContainerColor = SageContainerLow,
+                                disabledContentColor = MutedIcon
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -825,24 +900,24 @@ fun RecorderScreen(
 
                         FilledTonalButton(
                             onClick = {
-                                val target = activeAudioFile ?: recordedAudioFile
-                                if (target != null) {
-                                    val shareIntent = AudioFileManager.createShareIntent(context, target)
+                                if (hasAudioTake) {
+                                    val shareIntent = AudioFileManager.createShareIntent(context, currentTargetAudio!!)
                                     context.startActivity(shareIntent)
                                     historyManager.addRecording(
-                                        target,
+                                        currentTargetAudio,
                                         lastRecordedDuration,
                                         selectedFilter,
                                         historyManager.selectedFormat
                                     )
-                                } else {
-                                    Toast.makeText(context, "Record audio first", Toast.LENGTH_SHORT).show()
                                 }
                             },
+                            enabled = hasAudioTake,
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.filledTonalButtonColors(
                                 containerColor = SageContainer,
-                                contentColor = SagePrimary
+                                contentColor = SagePrimary,
+                                disabledContainerColor = SageContainerLow,
+                                disabledContentColor = MutedIcon
                             ),
                             modifier = Modifier.weight(1f)
                         ) {
@@ -861,227 +936,236 @@ fun RecorderScreen(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Tactile Recording Dock in Thumb Zone
-        Surface(
+    val haptic = LocalHapticFeedback.current
+
+    // Tactile Recording Dock in Thumb Zone
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 10.dp),
+        shape = RoundedCornerShape(32.dp),
+        color = SageCard,
+        shadowElevation = 5.dp,
+        border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder)
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            shape = RoundedCornerShape(32.dp),
-            color = SageCard,
-            shadowElevation = 5.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, SageBorder)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // Left: Timer (isolated to prevent parent recomposition)
-                DockTimer(durationFlow = recorderEngine.durationMs, isRecording = isRecording)
+            // Left: Timer (isolated to prevent parent recomposition)
+            DockTimer(durationFlow = recorderEngine.durationMs, isRecording = isRecording)
 
-                // Center: Level Meter (isolated to prevent parent recomposition)
-                DockAmplitudeMeter(amplitudeFlow = recorderEngine.amplitude, isRecording = isRecording)
+            // Center: Level Meter (isolated to prevent parent recomposition)
+            DockAmplitudeMeter(amplitudeFlow = recorderEngine.amplitude, isRecording = isRecording)
 
-                // Right: Pill Button
-                if (!isRecording) {
-                    Button(
-                        onClick = {
-                            if (!hasMicPermission) {
-                                micLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                return@Button
-                            }
-                            playerHelper.stop()
-                            val started = recorderEngine.startRecording()
-                            if (!started) {
-                                Toast.makeText(context, "Microphone unavailable", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        shape = RoundedCornerShape(22.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SageContainer,
-                            contentColor = SagePrimary
-                        ),
-                        modifier = Modifier
-                            .height(44.dp)
-                            .width(120.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Record",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
-                } else {
-                    Button(
-                        onClick = {
-                            val duration = recorderEngine.durationMs.value
-                            lastRecordedDuration = duration
-                            val file = recorderEngine.stopRecording()
-                            if (file != null && file.exists()) {
-                                recordedAudioFile = file
-                                activeAudioFile = file
-                                selectedFilter = VoiceFilter.RAW
-                                // Auto save to history
-                                historyManager.addRecording(
-                                    file,
-                                    duration,
-                                    VoiceFilter.RAW,
-                                    historyManager.selectedFormat
+            // Right: Pill Button
+            if (!isRecording) {
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (!hasMicPermission) {
+                            micLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            return@Button
+                        }
+                        playerHelper.stop()
+                        val started = recorderEngine.startRecording()
+                        if (!started) {
+                            Toast.makeText(context, "Microphone unavailable", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = SageContainer,
+                        contentColor = SagePrimary
+                    ),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .width(120.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Start recording voice note",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Record",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            } else {
+                Button(
+                    onClick = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        val duration = recorderEngine.durationMs.value
+                        lastRecordedDuration = duration
+                        val file = recorderEngine.stopRecording()
+                        if (file != null && file.exists()) {
+                            recordedAudioFile = file
+                            activeAudioFile = file
+                            selectedFilter = VoiceFilter.RAW
+                            // Auto save to history
+                            historyManager.addRecording(
+                                file,
+                                duration,
+                                VoiceFilter.RAW,
+                                historyManager.selectedFormat
+                            )
+                            // If auto-paste is enabled, copy and paste automatically!
+                            if (historyManager.isAutoPasteEnabled) {
+                                AudioFileManager.copyAudioToClipboard(
+                                    context = context,
+                                    file = file,
+                                    autoPaste = true
                                 )
-                                // If auto-paste is enabled, copy and paste automatically!
-                                if (historyManager.isAutoPasteEnabled) {
-                                    AudioFileManager.copyAudioToClipboard(
-                                        context = context,
-                                        file = file,
-                                        autoPaste = true
-                                    )
-                                }
                             }
-                        },
-                        shape = RoundedCornerShape(22.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = TerracottaDot,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier
-                            .height(44.dp)
-                            .width(120.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Done",
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp,
-                            maxLines = 1,
-                            softWrap = false
-                        )
-                    }
+                        }
+                    },
+                    shape = RoundedCornerShape(22.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = TerracottaDot,
+                        contentColor = Color.White
+                    ),
+                    modifier = Modifier
+                        .height(44.dp)
+                        .width(120.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Stop,
+                        contentDescription = "Finish recording",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Done",
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
     }
+}
 
-    if (showAppSelectionDialog) {
-        AppSelectionDialog(
-            historyManager = historyManager,
-            onDismissRequest = { showAppSelectionDialog = false }
-        )
-    }
+if (showAppSelectionDialog) {
+    AppSelectionDialog(
+        historyManager = historyManager,
+        onDismissRequest = { showAppSelectionDialog = false }
+    )
+}
 }
 
 @Composable
 fun DockTimer(
-    durationFlow: kotlinx.coroutines.flow.StateFlow<Long>,
-    isRecording: Boolean
+durationFlow: kotlinx.coroutines.flow.StateFlow<Long>,
+isRecording: Boolean
 ) {
-    val durationMs by durationFlow.collectAsState()
-    val seconds = (durationMs / 1000) % 60
-    val minutes = (durationMs / 1000) / 60
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(if (isRecording) TerracottaDot else Color(0xFFB0BEC5))
-        )
-        Text(
-            text = String.format("%02d:%02d", minutes, seconds),
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 17.sp,
-            color = SageText
-        )
-    }
+val durationMs by durationFlow.collectAsState()
+val seconds = (durationMs / 1000) % 60
+val minutes = (durationMs / 1000) / 60
+Row(
+    verticalAlignment = Alignment.CenterVertically,
+    horizontalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    Box(
+        modifier = Modifier
+            .size(10.dp)
+            .clip(CircleShape)
+            .background(if (isRecording) TerracottaDot else InactiveBar)
+    )
+    Text(
+        text = String.format("%02d:%02d", minutes, seconds),
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 17.sp,
+        color = SageText
+    )
+}
 }
 
 @Composable
 fun DockAmplitudeMeter(
-    amplitudeFlow: kotlinx.coroutines.flow.StateFlow<Float>,
-    isRecording: Boolean
+amplitudeFlow: kotlinx.coroutines.flow.StateFlow<Float>,
+isRecording: Boolean
 ) {
-    val amplitude by amplitudeFlow.collectAsState()
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(20.dp)
-    ) {
-        repeat(5) { i ->
-            val barHeight = if (isRecording) {
-                (6 + (amplitude * (i + 1) * 6)).coerceIn(4f, 20f)
-            } else 6f
-            Box(
-                modifier = Modifier
-                    .width(3.dp)
-                    .height(barHeight.dp)
-                    .clip(RoundedCornerShape(1.5.dp))
-                    .background(if (isRecording) SagePrimary else Color(0xFFD0D7D3))
-            )
-        }
+val amplitude by amplitudeFlow.collectAsState()
+Row(
+    horizontalArrangement = Arrangement.spacedBy(3.dp),
+    verticalAlignment = Alignment.CenterVertically,
+    modifier = Modifier.height(20.dp)
+) {
+    repeat(5) { i ->
+        val targetHeight = if (isRecording) {
+            (6 + (amplitude * (i + 1) * 6)).coerceIn(4f, 20f)
+        } else 6f
+        val animatedHeight by animateDpAsState(
+            targetValue = targetHeight.dp,
+            animationSpec = tween(durationMillis = 60),
+            label = "ampBar$i"
+        )
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(animatedHeight)
+                .clip(RoundedCornerShape(1.5.dp))
+                .background(if (isRecording) SagePrimary else InactiveBar)
+        )
     }
+}
 }
 
 @Composable
 fun PermissionBox(
-    title: String,
-    description: String,
-    isGranted: Boolean,
-    icon: ImageVector,
-    onClick: () -> Unit
+title: String,
+description: String,
+isGranted: Boolean,
+icon: ImageVector,
+onClick: () -> Unit
 ) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = if (isGranted) SageContainerLow else Color(0xFFFDFBF9),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isGranted) SageBorder else Color(0xFFF0DDD6)
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
+Surface(
+    shape = RoundedCornerShape(14.dp),
+    color = if (isGranted) SageContainerLow else TerracottaSoft,
+    border = androidx.compose.foundation.BorderStroke(
+        1.dp,
+        if (isGranted) SageBorder else TerracottaLine
+    ),
+    modifier = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onClick)
+) {
+    Row(
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.weight(1f)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(if (isGranted) SageContainer else TerracottaTint),
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .clip(CircleShape)
-                        .background(if (isGranted) SageContainer else Color(0xFFF5ECE8)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = if (isGranted) SagePrimary else TerracottaDot,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isGranted) SagePrimary else TerracottaDot,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column {
                     Text(

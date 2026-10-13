@@ -1,0 +1,16 @@
+[package]
+name = "ditto"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["walsoup"]
+description = "Ditto for GNOME: press F4, speak, press F4, paste the voice note."
+
+[dependencies]
+ditto-core = { path = "../core" }
+gtk = { package = "gtk4", version = "0.9", features = ["v4_14"] }
+adw = { package = "libadwaita", version = "0.7", features = ["v1_5"] }
+
+[profile.release]
+lto = true
+strip = true

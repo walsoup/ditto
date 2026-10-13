@@ -1,0 +1,256 @@
+/* Colors come from the @d_* tokens generated in style.rs. Flat surfaces only:
+   no gradients, no glow, hairlines instead of cards. */
+
+window.ditto,
+window.ditto > contents {
+  background-color: @d_bg;
+  color: @d_text;
+}
+
+window.ditto headerbar {
+  background-color: @d_bg;
+  box-shadow: none;
+  border: none;
+  min-height: 44px;
+}
+
+.hairline {
+  background-color: @d_hairline;
+  min-width: 1px;
+  min-height: 1px;
+}
+
+.overline {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: @d_text2;
+}
+
+.wordmark {
+  font-size: 44px;
+  font-weight: 600;
+  letter-spacing: -2px;
+}
+
+.wordmark-dot {
+  color: @d_primary;
+}
+
+.lede {
+  font-size: 15px;
+  color: @d_text2;
+}
+
+.section-title {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+
+.count {
+  font-family: monospace;
+  font-size: 12px;
+  color: @d_muted;
+}
+
+.line {
+  min-height: 52px;
+}
+
+.line-label {
+  font-size: 15px;
+}
+
+.line-value {
+  font-size: 14px;
+  color: @d_text2;
+}
+
+.keycap {
+  font-family: monospace;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 7px;
+  background-color: @d_container;
+  color: @d_primary;
+  border: 1px solid @d_hairline;
+}
+
+.keycap.large {
+  font-size: 22px;
+  padding: 10px 18px;
+  border-radius: 10px;
+}
+
+button.keycap-button {
+  padding: 4px;
+  min-height: 0;
+  background: none;
+}
+
+button.keycap-button:hover .keycap {
+  border-color: @d_primary;
+}
+
+dropdown.line-dropdown > button {
+  background: none;
+  color: @d_text2;
+  font-size: 14px;
+  padding: 4px 6px;
+  min-height: 0;
+}
+
+dropdown.line-dropdown > button:hover {
+  background-color: @d_container_low;
+}
+
+.footnote {
+  font-size: 12px;
+  color: @d_muted;
+}
+
+/* Recent tracklist */
+
+list.tracks {
+  background: none;
+}
+
+list.tracks > row {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  border-bottom: 1px solid @d_hairline;
+}
+
+list.tracks > row:hover {
+  background-color: @d_container_low;
+}
+
+list.tracks > row:focus-visible {
+  outline: 2px solid @d_primary;
+  outline-offset: -2px;
+}
+
+.track-index {
+  font-family: monospace;
+  font-size: 12px;
+  color: @d_muted;
+}
+
+.track-title {
+  font-size: 15px;
+}
+
+.track-sub {
+  font-size: 12px;
+  color: @d_text2;
+}
+
+.track-duration {
+  font-family: monospace;
+  font-size: 13px;
+  color: @d_text2;
+}
+
+.row-actions {
+  opacity: 0;
+}
+
+list.tracks > row:hover .row-actions,
+list.tracks > row:focus-within .row-actions {
+  opacity: 1;
+}
+
+button.icon {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-radius: 16px;
+  background: none;
+  color: @d_text2;
+}
+
+button.icon:hover {
+  background-color: @d_container;
+  color: @d_primary;
+}
+
+.empty-note {
+  font-size: 14px;
+  color: @d_text2;
+}
+
+/* Record dock and floating pill share one capsule style */
+
+.dock {
+  background-color: @d_surface;
+  border: 1px solid @d_hairline;
+  border-radius: 32px;
+  min-height: 64px;
+  padding: 0 10px 0 22px;
+}
+
+.dock.live {
+  border-color: @d_rec;
+}
+
+.timer {
+  font-family: monospace;
+  font-size: 17px;
+  font-weight: 600;
+  color: @d_muted;
+}
+
+.timer.live {
+  color: @d_rec;
+}
+
+.hint {
+  font-size: 13px;
+  color: @d_muted;
+}
+
+button.pill-button {
+  min-height: 44px;
+  border-radius: 22px;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 600;
+  background-color: @d_container;
+  color: @d_primary;
+  box-shadow: none;
+}
+
+button.pill-button:hover {
+  background-color: shade(@d_container, 0.97);
+}
+
+button.pill-button.stop {
+  background-color: @d_rec;
+  color: @d_on_primary;
+}
+
+button.pill-button.stop:hover {
+  background-color: shade(@d_rec, 0.95);
+}
+
+button.pill-button:disabled {
+  background-color: @d_container_low;
+  color: @d_muted;
+}
+
+window.pill-window,
+window.pill-window > contents {
+  background: none;
+  box-shadow: none;
+}
+
+/* Shortcut picker */
+
+.picker-title {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}

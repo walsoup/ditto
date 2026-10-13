@@ -40,6 +40,13 @@ class AudioRecorderEngine(private val context: Context) {
     private val _durationMs = MutableStateFlow(0L)
     val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
+    private val _levels = MutableStateFlow<List<Float>>(emptyList())
+    val levels: StateFlow<List<Float>> = _levels.asStateFlow()
+
+    private val takeLevels = ArrayList<Float>()
+
+    fun recordedLevels(): List<Float> = synchronized(takeLevels) { takeLevels.toList() }
+
     private var currentPcmFile: File? = null
     private var currentWavFile: File? = null
 
@@ -84,6 +91,8 @@ class AudioRecorderEngine(private val context: Context) {
             accumulatedDurationMs = 0L
             segmentStartTime = System.currentTimeMillis()
             _durationMs.value = 0L
+            _levels.value = emptyList()
+            synchronized(takeLevels) { takeLevels.clear() }
 
             recordingJob = scope.launch {
                 val pcmOut = FileOutputStream(currentPcmFile)
@@ -114,6 +123,8 @@ class AudioRecorderEngine(private val context: Context) {
                                 val rms = sqrt(sumSquares / readCount)
                                 val normalized = (rms / 12000.0).coerceIn(0.0, 1.0).toFloat()
                                 _amplitude.value = normalized
+                                synchronized(takeLevels) { takeLevels.add(normalized) }
+                                _levels.value = (_levels.value + normalized).takeLast(64)
                                 _durationMs.value = accumulatedDurationMs + (now - segmentStartTime)
                                 lastUiUpdate = now
                             }

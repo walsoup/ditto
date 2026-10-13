@@ -765,7 +765,8 @@ class FloatingBubbleService : Service() {
                                                                 file = fileToSend,
                                                                 durationMs = recordedDurationMs.value,
                                                                 filter = selectedFilter.value,
-                                                                format = targetFormat
+                                                                format = targetFormat,
+                                                                targetPackage = currentPkg
                                                             )
                                                         } catch (e: Exception) {
                                                              e.printStackTrace()
@@ -777,7 +778,8 @@ class FloatingBubbleService : Service() {
                                                             durationMs = recordedDurationMs.value,
                                                             filter = selectedFilter.value,
                                                             format = targetFormat,
-                                                            historyManager = historyManager
+                                                            historyManager = historyManager,
+                                                            targetPackage = DittoAccessibilityService.currentForegroundPackage.value
                                                         )
                                                     }
                                                     collapseOverlay()

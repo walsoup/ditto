@@ -26,7 +26,8 @@ object AudioFileManager {
         context: Context,
         file: File,
         label: String = "Ditto Audio",
-        autoPaste: Boolean = true
+        autoPaste: Boolean = true,
+        showToast: Boolean = true
     ): Boolean {
         return try {
             val uri = getAudioContentUri(context, file)
@@ -80,7 +81,7 @@ object AudioFileManager {
                         }
                     }
                 }, 200)
-            } else {
+            } else if (showToast) {
                 Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
             }
             true
@@ -100,7 +101,8 @@ object AudioFileManager {
         durationMs: Long,
         filter: VoiceFilter,
         format: AudioFormatType,
-        historyManager: com.walsoup.ditto.data.HistoryManager
+        historyManager: com.walsoup.ditto.data.HistoryManager,
+        targetPackage: String? = null
     ): Boolean {
         // If target format is M4A but input is WAV, transcode before sending
         val targetFile = if (format == AudioFormatType.M4A && file.name.endsWith(".wav")) {
@@ -119,10 +121,59 @@ object AudioFileManager {
                 file = targetFile,
                 durationMs = durationMs,
                 filter = filter,
-                format = format
+                format = format,
+                targetPackage = targetPackage
             )
         }
         return success
+    }
+
+    /**
+     * Copies the clip, opens [packageName] and pastes into its focused field once it is in front.
+     * WhatsApp gets a share intent instead, since it rejects pasted audio URIs.
+     */
+    fun pasteIntoApp(context: Context, file: File, packageName: String, autoPaste: Boolean): Boolean {
+        if (!copyAudioToClipboard(context, file, autoPaste = false, showToast = false)) return false
+        val uri = getAudioContentUri(context, file)
+        try {
+            context.grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: Exception) {}
+
+        if (packageName.contains("whatsapp")) {
+            return try {
+                context.startActivity(createShareIntent(context, file).setPackage(packageName))
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        val launch = context.packageManager.getLaunchIntentForPackage(packageName) ?: return false
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(launch)
+        if (autoPaste) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                DittoAccessibilityService.instance?.performDirectPaste()
+            }, 900)
+        }
+        return true
+    }
+
+    fun appLabel(context: Context, packageName: String?): String? {
+        if (packageName.isNullOrBlank()) return null
+        return try {
+            val pm = context.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(packageName, 0)).toString()
+        } catch (_: Exception) {
+            when {
+                packageName.startsWith("com.whatsapp") -> "WhatsApp"
+                packageName.startsWith("org.telegram") -> "Telegram"
+                packageName == "org.thoughtcrime.securesms" -> "Signal"
+                packageName == "com.discord" -> "Discord"
+                packageName == "com.Slack" -> "Slack"
+                else -> null
+            }
+        }
     }
 
     /**

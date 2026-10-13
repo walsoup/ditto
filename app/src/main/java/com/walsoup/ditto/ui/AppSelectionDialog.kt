@@ -67,21 +67,23 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
-import com.walsoup.ditto.SageBg
-import com.walsoup.ditto.SageBorder
-import com.walsoup.ditto.SageCard
-import com.walsoup.ditto.SageContainer
-import com.walsoup.ditto.SageContainerLow
-import com.walsoup.ditto.SagePrimary
-import com.walsoup.ditto.SageSubtext
-import com.walsoup.ditto.SageText
-import com.walsoup.ditto.TerracottaDot
-import com.walsoup.ditto.theme.TerracottaLine
-import com.walsoup.ditto.theme.TerracottaSoft
+import com.walsoup.ditto.theme.Ditto
 import com.walsoup.ditto.data.AppFilterHelper
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.data.InstalledApp
 import com.walsoup.ditto.isAccessibilityServiceEnabled
+
+private val SageBg: Color @Composable get() = Ditto.colors.bg
+private val SageBorder: Color @Composable get() = Ditto.colors.hairline
+private val SageCard: Color @Composable get() = Ditto.colors.surface
+private val SageContainer: Color @Composable get() = Ditto.colors.container
+private val SageContainerLow: Color @Composable get() = Ditto.colors.containerLow
+private val SagePrimary: Color @Composable get() = Ditto.colors.primary
+private val SageSubtext: Color @Composable get() = Ditto.colors.textSecondary
+private val SageText: Color @Composable get() = Ditto.colors.text
+private val TerracottaDot: Color @Composable get() = Ditto.colors.rec
+private val TerracottaSoft: Color @Composable get() = Ditto.colors.recSoft
+private val TerracottaLine: Color @Composable get() = Ditto.colors.rec.copy(alpha = 0.25f)
 
 @Composable
 fun AppSelectionDialog(
@@ -402,7 +404,7 @@ fun AppSelectionDialog(
                     onClick = onDismissRequest,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SagePrimary,
-                        contentColor = Color.White
+                        contentColor = Ditto.colors.onPrimary
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
@@ -497,7 +499,7 @@ private fun AppItemRow(
             onCheckedChange = { onToggle(it) },
             colors = CheckboxDefaults.colors(
                 checkedColor = SagePrimary,
-                checkmarkColor = Color.White,
+                checkmarkColor = Ditto.colors.onPrimary,
                 uncheckedColor = SageBorder
             )
         )

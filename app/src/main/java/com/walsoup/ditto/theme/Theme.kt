@@ -5,57 +5,60 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 
-// Pastel Material 3 Color Schemes - Strictly No Purple, Solid Flat Surfaces
-private val LightColorScheme = lightColorScheme(
-    primary = ForestSage,
-    onPrimary = CleanWhite,
-    primaryContainer = SoftSage,
-    onPrimaryContainer = ForestSage,
-    secondary = SoftSage,
-    onSecondary = SlateText,
-    tertiary = WarmTerracotta,
-    onTertiary = CleanWhite,
-    background = LinenCream,
-    onBackground = SlateText,
-    surface = LinenCream,
-    onSurface = SlateText,
-    surfaceVariant = SoftSage,
-    onSurfaceVariant = SlateSubtext,
-    outline = HairlineBorder,
-    outlineVariant = SoftSageLow,
-    error = WarmTerracotta,
-    onError = CleanWhite
-)
+val LocalDittoColors = staticCompositionLocalOf { LightDittoColors }
 
-private val DarkColorScheme = darkColorScheme(
-    primary = ForestSage,
-    onPrimary = CleanWhite,
-    primaryContainer = SoftSage,
-    onPrimaryContainer = ForestSage,
-    secondary = SoftSage,
-    onSecondary = SlateText,
-    tertiary = WarmTerracotta,
-    onTertiary = CleanWhite,
-    background = LinenCream,
-    onBackground = SlateText,
-    surface = LinenCream,
-    onSurface = SlateText,
-    surfaceVariant = SoftSage,
-    onSurfaceVariant = SlateSubtext,
-    outline = HairlineBorder,
-    outlineVariant = SoftSageLow,
-    error = WarmTerracotta,
-    onError = CleanWhite
-)
+object Ditto {
+    val colors: DittoColors
+        @Composable @ReadOnlyComposable get() = LocalDittoColors.current
+    val type: DittoTypography
+        get() = DittoType
+}
 
 @Composable
 fun DittoTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // Default false to enforce strict Pastel Material 3 invariant
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val c = if (darkTheme) DarkDittoColors else LightDittoColors
+    val scheme = if (darkTheme) {
+        darkColorScheme(
+            primary = c.primary, onPrimary = c.onPrimary,
+            primaryContainer = c.container, onPrimaryContainer = c.primary,
+            secondary = c.primary, onSecondary = c.onPrimary,
+            secondaryContainer = c.container, onSecondaryContainer = c.primary,
+            tertiary = c.rec, onTertiary = c.onPrimary,
+            background = c.bg, onBackground = c.text,
+            surface = c.bg, onSurface = c.text,
+            surfaceVariant = c.containerLow, onSurfaceVariant = c.textSecondary,
+            surfaceContainer = c.surface, surfaceContainerHigh = c.surface, surfaceContainerHighest = c.container,
+            surfaceContainerLow = c.surface, surfaceContainerLowest = c.bg,
+            inverseSurface = c.text, inverseOnSurface = c.bg, inversePrimary = c.primary,
+            outline = c.hairline, outlineVariant = c.hairline,
+            error = c.rec, onError = c.onPrimary, scrim = c.scrim
+        )
+    } else {
+        lightColorScheme(
+            primary = c.primary, onPrimary = c.onPrimary,
+            primaryContainer = c.container, onPrimaryContainer = c.primary,
+            secondary = c.primary, onSecondary = c.onPrimary,
+            secondaryContainer = c.container, onSecondaryContainer = c.primary,
+            tertiary = c.rec, onTertiary = c.onPrimary,
+            background = c.bg, onBackground = c.text,
+            surface = c.bg, onSurface = c.text,
+            surfaceVariant = c.containerLow, onSurfaceVariant = c.textSecondary,
+            surfaceContainer = c.surface, surfaceContainerHigh = c.surface, surfaceContainerHighest = c.container,
+            surfaceContainerLow = c.surface, surfaceContainerLowest = c.bg,
+            inverseSurface = c.text, inverseOnSurface = c.bg, inversePrimary = c.primary,
+            outline = c.hairline, outlineVariant = c.hairline,
+            error = c.rec, onError = c.onPrimary, scrim = c.scrim
+        )
+    }
 
-    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
+    CompositionLocalProvider(LocalDittoColors provides c) {
+        MaterialTheme(colorScheme = scheme, typography = Typography, content = content)
+    }
 }

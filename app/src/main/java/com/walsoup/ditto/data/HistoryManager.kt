@@ -178,6 +178,15 @@ class HistoryManager(private val context: Context) {
             prefs.edit().putString("audio_format", value.name).apply()
         }
 
+    var defaultFilter: VoiceFilter
+        get() {
+            val name = prefs.getString("default_filter", VoiceFilter.RAW.name)
+            return VoiceFilter.entries.find { it.name == name } ?: VoiceFilter.RAW
+        }
+        set(value) {
+            prefs.edit().putString("default_filter", value.name).apply()
+        }
+
     var isFloatingServiceEnabled: Boolean
         get() = prefs.getBoolean("floating_service_enabled", false)
         set(value) {
@@ -303,7 +312,8 @@ class HistoryManager(private val context: Context) {
                                 durationMs = obj.getLong("durationMs"),
                                 format = format,
                                 filter = filter,
-                                createdAt = obj.getLong("createdAt")
+                                createdAt = obj.getLong("createdAt"),
+                                targetPackage = obj.optString("targetPackage").ifBlank { null }
                             )
                         )
                     }
@@ -320,7 +330,8 @@ class HistoryManager(private val context: Context) {
         file: File,
         durationMs: Long,
         filter: VoiceFilter,
-        format: AudioFormatType
+        format: AudioFormatType,
+        targetPackage: String? = null
     ) {
         if (!isHistoryEnabled) return
 
@@ -331,7 +342,8 @@ class HistoryManager(private val context: Context) {
             durationMs = durationMs,
             format = format,
             filter = filter,
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            targetPackage = targetPackage
         )
 
         val updated = listOf(item) + _history.value
@@ -343,12 +355,13 @@ class HistoryManager(private val context: Context) {
         file: File,
         durationMs: Long,
         filterName: String,
-        format: AudioFormatType
+        format: AudioFormatType,
+        targetPackage: String? = null
     ) {
         val filter = VoiceFilter.entries.find {
             it.name.equals(filterName, ignoreCase = true) || it.displayName.equals(filterName, ignoreCase = true)
         } ?: VoiceFilter.RAW
-        addRecording(file, durationMs, filter, format)
+        addRecording(file, durationMs, filter, format, targetPackage)
     }
 
     fun stageDeleteItem(id: String): HistoryItem? {
@@ -414,6 +427,7 @@ class HistoryManager(private val context: Context) {
                         put("format", item.format.name)
                         put("filterName", item.filter.name)
                         put("createdAt", item.createdAt)
+                        item.targetPackage?.let { put("targetPackage", it) }
                     }
                     array.put(obj)
                 }

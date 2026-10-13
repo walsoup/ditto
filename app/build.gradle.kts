@@ -21,8 +21,8 @@ android {
         applicationId = "com.walsoup.ditto"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.0.7-alpha"
+        versionCode = 8
+        versionName = "1.0.0"
         resourceConfigurations += setOf("en")
     }
 
@@ -80,6 +80,10 @@ android {
 
 kotlin {
     jvmToolchain(21)
+}
+
+composeCompiler {
+    includeComposeMappingFile = false
 }
 
 dependencies {

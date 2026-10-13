@@ -1,10 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <rect x="8" y="8" width="112" height="112" rx="28" fill="#2D6A4F"/>
-  <rect x="22" y="46" width="84" height="36" rx="18" fill="#FAF9F6"/>
-  <rect x="36" y="58" width="5" height="12" rx="2.5" fill="#D47255"/>
-  <rect x="46" y="53" width="5" height="22" rx="2.5" fill="#D47255"/>
-  <rect x="56" y="56" width="5" height="16" rx="2.5" fill="#D47255"/>
-  <rect x="66" y="51" width="5" height="26" rx="2.5" fill="#D47255"/>
-  <rect x="76" y="57" width="5" height="14" rx="2.5" fill="#D47255"/>
-  <rect x="86" y="60" width="5" height="8" rx="2.5" fill="#D47255"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Warm cream paper squircle with subtle hairline border -->
+  <rect x="4" y="4" width="504" height="504" rx="112" fill="#F5EFE1" stroke="#E6DFCD" stroke-width="8"/>
+
+  <!-- Sage capsule halo behind the mic head -->
+  <rect x="168" y="92" width="176" height="196" rx="88" fill="#D4E6DB"/>
+
+  <!-- Twin "Ditto" bars (mic capsule / eyes) -->
+  <rect x="204" y="122" width="40" height="128" rx="20" fill="#2D6A4F"/>
+  <rect x="268" y="122" width="40" height="128" rx="20" fill="#2D6A4F"/>
+
+  <!-- Microphone U-cradle (smile), stem, and base -->
+  <path d="M 152 216 A 104 104 0 0 0 360 216" fill="none" stroke="#2D6A4F" stroke-width="36" stroke-linecap="round"/>
+  <line x1="256" y1="320" x2="256" y2="396" stroke="#2D6A4F" stroke-width="36" stroke-linecap="round"/>
+  <line x1="190" y1="396" x2="322" y2="396" stroke="#2D6A4F" stroke-width="36" stroke-linecap="round"/>
+
+  <!-- Terracotta recording dot, kept inside the adaptive-icon safe zone -->
+  <circle cx="370" cy="122" r="36" fill="#D47255"/>
 </svg>

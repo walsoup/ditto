@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Single-color silhouette for themed icons and the notification icon: no halo, so the bars stay readable. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.155"
+        android:scaleY="0.155"
+        android:translateX="14.32"
+        android:translateY="14.785">
+
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M204,142 A20,20 0 0,1 244,142 L244,230 A20,20 0 0,1 204,230 Z M268,142 A20,20 0 0,1 308,142 L308,230 A20,20 0 0,1 268,230 Z M334,122 A36,36 0 1,0 406,122 A36,36 0 1,0 334,122 Z" />
+
+        <path
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"
+            android:pathData="M152,216 A104,104 0 0,0 360,216 M256,320 L256,396 M190,396 L322,396" />
+    </group>
+</vector>

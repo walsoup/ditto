@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: copied voice</title>
+  <rect width="108" height="108" fill="#E8F1EC"/>
+  <rect x="42" y="30" width="36" height="36" rx="10" fill="none" stroke="#2D6A4F" stroke-width="4"/>
+  <rect x="30" y="42" width="36" height="36" rx="10" fill="#2D6A4F"/>
+  <g fill="#FAF9F6">
+    <rect x="37.5" y="56" width="3.5" height="8" rx="1.75"/>
+    <rect x="43.5" y="52" width="3.5" height="16" rx="1.75"/>
+    <rect x="49.5" y="48" width="3.5" height="24" rx="1.75"/>
+    <rect x="55.5" y="53" width="3.5" height="14" rx="1.75"/>
+  </g>
+  <circle cx="69" cy="40" r="5" fill="#D47255"/>
+</svg>

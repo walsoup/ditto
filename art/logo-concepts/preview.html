@@ -1,0 +1,64 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Ditto logo concepts</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1240px; font-family: Inter, Cantarell, system-ui, sans-serif; background: #FAF9F6; color: #1F2421; }
+  h2 { font-size: 13px; font-weight: 500; letter-spacing: .5px; text-transform: uppercase; color: #526058; padding: 20px 24px 4px; }
+  .row { display: grid; grid-template-columns: 150px repeat(5, minmax(0, 1fr)); border-bottom: 1px solid #E0E6E2; }
+  .row.dark { background: #121513; border-color: #2A322D; }
+  .label { padding: 20px 24px; font-size: 12px; color: #526058; display: flex; align-items: center; }
+  .dark .label { color: #A3B0A8; }
+  .cell { padding: 18px 6px; display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; }
+  .name { font-weight: 600; font-size: 14px; justify-content: flex-start; padding-left: 24px; }
+  .name span { font-family: monospace; color: #8A9A90; margin-right: 8px; }
+  img { display: block; }
+  .squircle { border-radius: 26%; overflow: hidden; box-shadow: 0 0 0 1px rgba(31,36,33,.08); }
+  .circle { border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1px rgba(31,36,33,.08); }
+  .dark .squircle, .dark .circle { box-shadow: none; }
+</style>
+</head>
+<body>
+<div id="sheet"></div>
+<script>
+  const sets = [
+    ["Original", [["A", "Ditto mark", "a-ditto-mark"], ["B", "Record dock", "b-dock"], ["C", "Copied voice", "c-copied-voice"], ["D", "d. monogram", "d-monogram"]]],
+    ["Gloopy", [["A", "Goo mark", "gloopy/a-goo-mark"], ["B", "Goo dock", "gloopy/b-goo-dock"], ["C", "Budding copy", "gloopy/c-goo-copy"], ["D", "Melting d.", "gloopy/d-goo-monogram"], ["E", "Goo buddy", "gloopy/e-goo-buddy"]]],
+    ["Yours", [["F", "Twin mic", "f-twin-mic", true]]],
+  ];
+  // Adaptive icons show the middle 72 of 108 units. Finished icons (own squircle) render as-is.
+  const icon = (file, size, mask, finished) => {
+    const wrap = document.createElement("div");
+    wrap.className = finished ? "" : mask;
+    wrap.style.width = wrap.style.height = size + "px";
+    const img = document.createElement("img");
+    const full = finished ? size : size * 108 / 72;
+    img.src = file + ".svg";
+    img.style.width = img.style.height = full + "px";
+    img.style.margin = -(full - size) / 2 + "px";
+    wrap.appendChild(img);
+    return wrap;
+  };
+  const row = (label, cls) => {
+    const r = document.createElement("div");
+    r.className = "row " + (cls || "");
+    r.innerHTML = `<div class="label">${label}</div>`;
+    return r;
+  };
+  const sheet = document.getElementById("sheet");
+  for (const [title, items] of sets) {
+    const h = document.createElement("h2"); h.textContent = title; sheet.appendChild(h);
+    const names = row(""), big = row("Launcher"), small = row("64 / 48 / 32 / 24"), dark = row("Dark wallpaper", "dark");
+    for (const [key, name, file, finished] of items) {
+      const n = document.createElement("div"); n.className = "cell name"; n.innerHTML = `<span>${key}</span>${name}`; names.appendChild(n);
+      const b = document.createElement("div"); b.className = "cell"; b.appendChild(icon(file, 132, "squircle", finished)); big.appendChild(b);
+      const s = document.createElement("div"); s.className = "cell"; for (const z of [64, 48, 32, 24]) s.appendChild(icon(file, z, "circle", finished)); small.appendChild(s);
+      const d = document.createElement("div"); d.className = "cell"; d.appendChild(icon(file, 64, "squircle", finished)); d.appendChild(icon(file, 44, "circle", finished)); dark.appendChild(d);
+    }
+    sheet.append(names, big, small, dark);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: ditto mark</title>
+  <rect width="108" height="108" fill="#2D6A4F"/>
+  <g stroke="#FAF9F6" stroke-width="9" stroke-linecap="round">
+    <path d="M45 38 L39 66"/>
+    <path d="M61 38 L55 66"/>
+  </g>
+  <circle cx="69" cy="66" r="5" fill="#D47255"/>
+</svg>

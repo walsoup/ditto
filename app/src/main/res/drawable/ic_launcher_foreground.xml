@@ -1,45 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn in the 512-unit space of art/logo-concepts/f-twin-mic.svg, scaled into the 66dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <group
+        android:scaleX="0.155"
+        android:scaleY="0.155"
+        android:translateX="14.32"
+        android:translateY="14.785">
 
-    <!-- Clean White Flat Circular Surface -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:strokeColor="#E0E6E2"
-        android:strokeWidth="1.5"
-        android:pathData="M28,54 A26,26 0 1,0 80,54 A26,26 0 1,0 28,54" />
+        <path
+            android:fillColor="#D4E6DB"
+            android:pathData="M168,180 A88,88 0 0,1 344,180 L344,200 A88,88 0 0,1 168,200 Z" />
 
-    <!-- Microphone Capsule Body -->
-    <path
-        android:fillColor="#2D6A4F"
-        android:pathData="M48,42 A6,6 0 0,1 60,42 L60,51 A6,6 0 0,1 48,51 Z" />
+        <path
+            android:fillColor="#2D6A4F"
+            android:pathData="M204,142 A20,20 0 0,1 244,142 L244,230 A20,20 0 0,1 204,230 Z M268,142 A20,20 0 0,1 308,142 L308,230 A20,20 0 0,1 268,230 Z" />
 
-    <!-- Microphone Cradle Bracket -->
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:pathData="M44,46 L44,50 A10,10 0 0,0 64,50 L64,46" />
+        <path
+            android:strokeColor="#2D6A4F"
+            android:strokeWidth="36"
+            android:strokeLineCap="round"
+            android:pathData="M152,216 A104,104 0 0,0 360,216 M256,320 L256,396 M190,396 L322,396" />
 
-    <!-- Microphone Stem -->
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:pathData="M54,60 L54,66" />
-
-    <!-- Microphone Base Stand -->
-    <path
-        android:strokeColor="#2D6A4F"
-        android:strokeWidth="3.2"
-        android:strokeLineCap="round"
-        android:pathData="M46,66 L62,66" />
-
-    <!-- Terracotta Recording Dot Accent -->
-    <path
-        android:fillColor="#D47255"
-        android:pathData="M65.5,33 A3.5,3.5 0 1,0 72.5,33 A3.5,3.5 0 1,0 65.5,33" />
+        <path
+            android:fillColor="#D47255"
+            android:pathData="M334,122 A36,36 0 1,0 406,122 A36,36 0 1,0 334,122 Z" />
+    </group>
 </vector>

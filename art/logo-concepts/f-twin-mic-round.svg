@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="18 18 72 72" width="512" height="512">
+  <!-- Round launcher variant: the Android adaptive layers as a launcher shows them. -->
+  <circle cx="54" cy="54" r="36" fill="#F5EFE1"/>
+  <g transform="translate(14.32 14.785) scale(0.155)">
+    <rect x="168" y="92" width="176" height="196" rx="88" fill="#D4E6DB"/>
+    <rect x="204" y="122" width="40" height="128" rx="20" fill="#2D6A4F"/>
+    <rect x="268" y="122" width="40" height="128" rx="20" fill="#2D6A4F"/>
+    <path d="M152 216 A104 104 0 0 0 360 216 M256 320 L256 396 M190 396 L322 396" fill="none" stroke="#2D6A4F" stroke-width="36" stroke-linecap="round"/>
+    <circle cx="370" cy="122" r="36" fill="#D47255"/>
+  </g>
+</svg>

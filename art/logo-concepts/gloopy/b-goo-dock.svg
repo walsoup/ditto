@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: goo record dock</title>
+  <rect width="108" height="108" fill="#FAF9F6"/>
+  <!-- The record pill as a soft puddle with one drip hanging off its belly. -->
+  <path fill="#2D6A4F" d="M31 39.5 C41 35 57 37.5 70 36.5 C80 35.8 85.5 43 85 52.5 C84.5 61 79 66.5 71.5 66.8 C67.5 67 66.8 74.5 62.6 74.5 C58.4 74.5 58.8 67.6 54.5 67.4 C45 67 36.5 69.5 29.5 65.5 C22.5 61.5 22 44 31 39.5 Z"/>
+  <circle cx="37.5" cy="52" r="5" fill="#D47255"/>
+  <g fill="#FAF9F6">
+    <rect x="48" y="48.5" width="4.4" height="8" rx="2.2"/>
+    <rect x="55" y="44.5" width="4.4" height="16" rx="2.2"/>
+    <rect x="62" y="46.5" width="4.4" height="12" rx="2.2"/>
+    <rect x="69" y="42.5" width="4.4" height="20" rx="2.2"/>
+    <rect x="76" y="49.5" width="4.4" height="6" rx="2.2"/>
+  </g>
+</svg>

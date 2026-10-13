@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: goo buddy</title>
+  <rect width="108" height="108" fill="#FAF9F6"/>
+  <!-- A speech-bubble blob mascot: happy closed eyes, a tiny waveform for a mouth,
+       and a drip for a bubble tail. -->
+  <path fill="#2D6A4F" d="M54 30 C66 30 80 34 81 49 C82 62 74 69 63 70 C60 70.3 59.2 72 59.6 75 C60 78 56.6 79.6 54.4 77.4 C52.6 75.6 52.8 72.4 50.4 71 C47 69 34 70 29 62 C24 54 26.5 42 33 36.5 C38.5 31.8 45 30 54 30 Z"/>
+  <g fill="none" stroke="#FAF9F6" stroke-width="3.4" stroke-linecap="round">
+    <path d="M41.5 49 Q45 44.5 48.5 49"/>
+    <path d="M59.5 49 Q63 44.5 66.5 49"/>
+  </g>
+  <g fill="#D47255">
+    <rect x="48.4" y="56" width="3" height="6" rx="1.5"/>
+    <rect x="52.6" y="54" width="3" height="10" rx="1.5"/>
+    <rect x="56.8" y="56.5" width="3" height="5" rx="1.5"/>
+  </g>
+</svg>

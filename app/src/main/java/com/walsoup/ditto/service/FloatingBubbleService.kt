@@ -381,7 +381,7 @@ class FloatingBubbleService : Service() {
         val notification: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle("Ditto is active")
             .setContentText("Tap floating mic to record")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()

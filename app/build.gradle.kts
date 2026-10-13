@@ -21,8 +21,8 @@ android {
         applicationId = "com.walsoup.ditto"
         minSdk = 24
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.0.0"
+        versionCode = 9
+        versionName = "1.0.1"
         resourceConfigurations += setOf("en")
     }
 

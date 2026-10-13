@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: voice budding off a copy</title>
+  <rect width="108" height="108" fill="#E8F1EC"/>
+  <!-- One blob pinching off a copy of itself, joined by a goo neck. -->
+  <path fill="#2D6A4F" d="M63.6 65.7 Q59.1 52.7 72.4 48.9 A10.5 10.5 0 1 0 59.2 35.2 Q54.9 48.3 42.1 43.2 A19 19 0 1 0 63.6 65.7 Z"/>
+  <g fill="#FAF9F6">
+    <rect x="33" y="58" width="3.6" height="8" rx="1.8"/>
+    <rect x="39" y="54" width="3.6" height="16" rx="1.8"/>
+    <rect x="45" y="51" width="3.6" height="22" rx="1.8"/>
+    <rect x="51" y="56" width="3.6" height="12" rx="1.8"/>
+  </g>
+  <circle cx="69" cy="39" r="4" fill="#D47255"/>
+</svg>

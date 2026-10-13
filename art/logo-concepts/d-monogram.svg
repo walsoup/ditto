@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>Ditto: d. monogram</title>
+  <rect width="108" height="108" fill="#2D6A4F"/>
+  <g fill="none" stroke="#FAF9F6" stroke-width="8" stroke-linecap="round">
+    <circle cx="47" cy="60" r="12"/>
+    <path d="M59 35 L59 72"/>
+  </g>
+  <circle cx="72" cy="69" r="5" fill="#D47255"/>
+</svg>

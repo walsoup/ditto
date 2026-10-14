@@ -60,13 +60,13 @@ import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
 import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.HistoryManager
-import com.walsoup.ditto.theme.Ditto
-import com.walsoup.ditto.ui.design.ActionButton
-import com.walsoup.ditto.ui.design.ActionStyle
-import com.walsoup.ditto.ui.design.RoundIconButton
+import com.walsoup.linen.Linen
+import com.walsoup.linen.ActionButton
+import com.walsoup.linen.ActionStyle
+import com.walsoup.linen.RoundIconButton
 import com.walsoup.ditto.ui.design.VoicePills
-import com.walsoup.ditto.ui.design.Waveform
-import com.walsoup.ditto.ui.design.formatClock
+import com.walsoup.linen.Waveform
+import com.walsoup.linen.formatClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,7 +91,7 @@ fun BoxScope.RecordSheetHost(
     historyManager: HistoryManager,
     lastTargetPackage: String?
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     var keepOnDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
 
     BackHandler(enabled = stage !is RecordStage.Idle) {
@@ -167,7 +167,7 @@ private fun RecordingContent(
     recorderEngine: AudioRecorderEngine,
     onStageChange: (RecordStage) -> Unit
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val durationMs by recorderEngine.durationMs.collectAsState()
@@ -185,11 +185,11 @@ private fun RecordingContent(
             Spacer(Modifier.width(7.dp))
             Text(
                 text = if (isPaused) "PAUSED" else "RECORDING",
-                style = Ditto.type.overline.copy(fontWeight = Ditto.type.label.fontWeight),
+                style = Linen.type.overline.copy(fontWeight = Linen.type.label.fontWeight),
                 color = if (isPaused) c.muted else c.rec
             )
         }
-        Text(formatClock(durationMs), style = Ditto.type.monoHero, color = c.text, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+        Text(formatClock(durationMs), style = Linen.type.monoHero, color = c.text, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
         Waveform(
             levels = levels,
             color = if (isPaused) c.inactive else c.rec,
@@ -249,7 +249,7 @@ private fun ReviewContent(
     registerKeep: ((() -> Unit)?) -> Unit,
     close: () -> Unit
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val format = historyManager.selectedFormat
@@ -284,10 +284,10 @@ private fun ReviewContent(
     }
 
     Column {
-        Text("Take ready", style = Ditto.type.title.copy(fontSize = Ditto.type.title.fontSize.times(1.05f)), color = c.text)
+        Text("Take ready", style = Linen.type.title.copy(fontSize = Linen.type.title.fontSize.times(1.05f)), color = c.text)
         Text(
             text = "${formatClock(review.durationMs)} · ${format.name}",
-            style = Ditto.type.monoTiny,
+            style = Linen.type.monoTiny,
             color = c.textSecondary,
             modifier = Modifier.padding(top = 2.dp)
         )

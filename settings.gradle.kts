@@ -31,3 +31,4 @@ plugins {
 
 rootProject.name = "Ditto"
 include(":app")
+include(":design")

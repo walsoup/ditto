@@ -67,23 +67,23 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.graphics.drawable.toBitmap
-import com.walsoup.ditto.theme.Ditto
+import com.walsoup.linen.Linen
 import com.walsoup.ditto.data.AppFilterHelper
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.data.InstalledApp
 import com.walsoup.ditto.isAccessibilityServiceEnabled
 
-private val SageBg: Color @Composable get() = Ditto.colors.bg
-private val SageBorder: Color @Composable get() = Ditto.colors.hairline
-private val SageCard: Color @Composable get() = Ditto.colors.surface
-private val SageContainer: Color @Composable get() = Ditto.colors.container
-private val SageContainerLow: Color @Composable get() = Ditto.colors.containerLow
-private val SagePrimary: Color @Composable get() = Ditto.colors.primary
-private val SageSubtext: Color @Composable get() = Ditto.colors.textSecondary
-private val SageText: Color @Composable get() = Ditto.colors.text
-private val TerracottaDot: Color @Composable get() = Ditto.colors.rec
-private val TerracottaSoft: Color @Composable get() = Ditto.colors.recSoft
-private val TerracottaLine: Color @Composable get() = Ditto.colors.rec.copy(alpha = 0.25f)
+private val SageBg: Color @Composable get() = Linen.colors.bg
+private val SageBorder: Color @Composable get() = Linen.colors.hairline
+private val SageCard: Color @Composable get() = Linen.colors.surface
+private val SageContainer: Color @Composable get() = Linen.colors.container
+private val SageContainerLow: Color @Composable get() = Linen.colors.containerLow
+private val SagePrimary: Color @Composable get() = Linen.colors.primary
+private val SageSubtext: Color @Composable get() = Linen.colors.textSecondary
+private val SageText: Color @Composable get() = Linen.colors.text
+private val TerracottaDot: Color @Composable get() = Linen.colors.rec
+private val TerracottaSoft: Color @Composable get() = Linen.colors.recSoft
+private val TerracottaLine: Color @Composable get() = Linen.colors.rec.copy(alpha = 0.25f)
 
 @Composable
 fun AppSelectionDialog(
@@ -404,7 +404,7 @@ fun AppSelectionDialog(
                     onClick = onDismissRequest,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = SagePrimary,
-                        contentColor = Ditto.colors.onPrimary
+                        contentColor = Linen.colors.onPrimary
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
@@ -499,7 +499,7 @@ private fun AppItemRow(
             onCheckedChange = { onToggle(it) },
             colors = CheckboxDefaults.colors(
                 checkedColor = SagePrimary,
-                checkmarkColor = Ditto.colors.onPrimary,
+                checkmarkColor = Linen.colors.onPrimary,
                 uncheckedColor = SageBorder
             )
         )

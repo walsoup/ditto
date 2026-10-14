@@ -8,6 +8,7 @@
 - **FileProvider Authority**: Use `${applicationId}.provider` in `AndroidManifest.xml` and `"${context.packageName}.provider"` in Kotlin.
 
 ## 2. UI/UX Design System (Pastel Material 3)
+- **UI**: build every screen with the Linen design system; follow `design/AGENTS.md`.
 - **Palette**: Flat Pastel Material 3 using the 60-30-10 rule:
   - 60% Base: Warm linen cream (`#FAF9F6`) and clean white card backgrounds (`#FFFFFF`).
   - 30% Structure: Soft sage containers (`#E8F1EC`), hairline borders (`#E0E6E2`), slate text (`#1F2421`).

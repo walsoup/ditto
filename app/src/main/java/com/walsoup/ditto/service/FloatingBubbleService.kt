@@ -1,5 +1,6 @@
 package com.walsoup.ditto.service
 
+import com.walsoup.linen.LinenPalette
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -87,14 +88,6 @@ import com.walsoup.ditto.core.audio.AudioRecorderEngine
 import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.AppFilterPolicy
 import com.walsoup.ditto.data.HistoryManager
-import com.walsoup.ditto.theme.CleanWhite
-import com.walsoup.ditto.theme.ForestSage
-import com.walsoup.ditto.theme.HairlineBorder
-import com.walsoup.ditto.theme.LinenCream
-import com.walsoup.ditto.theme.MutedIcon
-import com.walsoup.ditto.theme.SlateText
-import com.walsoup.ditto.theme.SoftSage
-import com.walsoup.ditto.theme.WarmTerracotta
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -192,8 +185,8 @@ class FloatingBubbleService : Service() {
                 if (isVisible) {
                     MaterialTheme(
                         colorScheme = lightColorScheme(
-                            primary = ForestSage,
-                            surface = LinenCream
+                            primary = LinenPalette.Forest,
+                            surface = LinenPalette.Linen
                         )
                     ) {
                         OverlayContent()
@@ -425,7 +418,7 @@ class FloatingBubbleService : Service() {
         val minutes = (durationMs / 1000) / 60
         Text(
             text = String.format("%02d:%02d", minutes, seconds),
-            color = SlateText,
+            color = LinenPalette.Slate,
             fontWeight = FontWeight.Medium,
             fontSize = 14.sp
         )
@@ -530,8 +523,8 @@ class FloatingBubbleService : Service() {
                     // Pastel sage recording pill
                     Card(
                         shape = RoundedCornerShape(24.dp),
-                        colors = CardDefaults.cardColors(containerColor = CleanWhite),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, HairlineBorder),
+                        colors = CardDefaults.cardColors(containerColor = LinenPalette.White),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, LinenPalette.Hairline),
                         elevation = CardDefaults.cardElevation(6.dp)
                     ) {
                         Row(
@@ -542,7 +535,7 @@ class FloatingBubbleService : Service() {
                                 modifier = Modifier
                                     .size(8.dp)
                                     .clip(CircleShape)
-                                    .background(if (isPaused) MutedIcon else WarmTerracotta)
+                                    .background(if (isPaused) LinenPalette.Muted else LinenPalette.Terracotta)
                             )
 
                             Spacer(modifier = Modifier.width(8.dp))
@@ -558,12 +551,12 @@ class FloatingBubbleService : Service() {
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(SoftSage)
+                                    .background(LinenPalette.Sage)
                             ) {
                                 Icon(
                                     imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
                                     contentDescription = if (isPaused) "Resume" else "Pause",
-                                    tint = ForestSage,
+                                    tint = LinenPalette.Forest,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -577,12 +570,12 @@ class FloatingBubbleService : Service() {
                                 modifier = Modifier
                                     .size(32.dp)
                                     .clip(CircleShape)
-                                    .background(SoftSage)
+                                    .background(LinenPalette.Sage)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Stop,
                                     contentDescription = "Stop",
-                                    tint = ForestSage,
+                                    tint = LinenPalette.Forest,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -599,7 +592,7 @@ class FloatingBubbleService : Service() {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Cancel",
-                                    tint = MutedIcon,
+                                    tint = LinenPalette.Muted,
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
@@ -611,8 +604,8 @@ class FloatingBubbleService : Service() {
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         elevation = CardDefaults.cardElevation(8.dp),
-                        colors = CardDefaults.cardColors(containerColor = CleanWhite),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, HairlineBorder),
+                        colors = CardDefaults.cardColors(containerColor = LinenPalette.White),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, LinenPalette.Hairline),
                         modifier = Modifier
                             .width(310.dp)
                             .padding(4.dp)
@@ -626,7 +619,7 @@ class FloatingBubbleService : Service() {
                                 Text(
                                     text = "Filter & Auto-Paste",
                                     fontWeight = FontWeight.Medium,
-                                    color = SlateText,
+                                    color = LinenPalette.Slate,
                                     fontSize = 14.sp
                                 )
 
@@ -641,12 +634,12 @@ class FloatingBubbleService : Service() {
                                         modifier = Modifier
                                             .size(30.dp)
                                             .clip(CircleShape)
-                                            .background(SoftSage)
+                                            .background(LinenPalette.Sage)
                                     ) {
                                         Icon(
                                             imageVector = if (isPlaying) Icons.Default.Stop else Icons.Default.PlayArrow,
                                             contentDescription = null,
-                                            tint = ForestSage,
+                                            tint = LinenPalette.Forest,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -663,7 +656,7 @@ class FloatingBubbleService : Service() {
                                         Icon(
                                             imageVector = Icons.Default.Close,
                                             contentDescription = "Close",
-                                            tint = MutedIcon,
+                                            tint = LinenPalette.Muted,
                                             modifier = Modifier.size(16.dp)
                                         )
                                     }
@@ -710,10 +703,10 @@ class FloatingBubbleService : Service() {
                                             Text(filter.displayName, fontSize = 12.sp)
                                         },
                                         colors = FilterChipDefaults.filterChipColors(
-                                            selectedContainerColor = SoftSage,
-                                            selectedLabelColor = ForestSage,
-                                            containerColor = LinenCream,
-                                            labelColor = SlateText
+                                            selectedContainerColor = LinenPalette.Sage,
+                                            selectedLabelColor = LinenPalette.Forest,
+                                            containerColor = LinenPalette.Linen,
+                                            labelColor = LinenPalette.Slate
                                         ),
                                         shape = RoundedCornerShape(10.dp)
                                     )
@@ -788,7 +781,7 @@ class FloatingBubbleService : Service() {
                                         }
                                     },
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = ForestSage,
+                                        containerColor = LinenPalette.Forest,
                                         contentColor = Color.White
                                     ),
                                     shape = RoundedCornerShape(12.dp),
@@ -851,8 +844,8 @@ class FloatingBubbleService : Service() {
                                         }
                                     },
                                     colors = ButtonDefaults.filledTonalButtonColors(
-                                        containerColor = SoftSage,
-                                        contentColor = ForestSage
+                                        containerColor = LinenPalette.Sage,
+                                        contentColor = LinenPalette.Forest
                                     ),
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)

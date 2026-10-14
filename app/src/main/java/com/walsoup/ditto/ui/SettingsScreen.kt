@@ -45,19 +45,19 @@ import com.walsoup.ditto.data.BubbleSize
 import com.walsoup.ditto.data.BubbleTheme
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.isAccessibilityServiceEnabled
-import com.walsoup.ditto.theme.Ditto
-import com.walsoup.ditto.ui.design.Hairline
-import com.walsoup.ditto.ui.design.PageHeader
-import com.walsoup.ditto.ui.design.Pill
-import com.walsoup.ditto.ui.design.ScreenMargin
-import com.walsoup.ditto.ui.design.SectionTitle
-import com.walsoup.ditto.ui.design.SettingLine
-import com.walsoup.ditto.ui.design.SwitchLine
+import com.walsoup.linen.Linen
+import com.walsoup.linen.Hairline
+import com.walsoup.linen.PageHeader
+import com.walsoup.linen.Pill
+import com.walsoup.linen.ScreenMargin
+import com.walsoup.linen.SectionTitle
+import com.walsoup.linen.SettingLine
+import com.walsoup.linen.SwitchLine
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(historyManager: HistoryManager) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     var selectedFormat by remember { mutableStateOf(historyManager.selectedFormat) }
     var autoPaste by remember { mutableStateOf(historyManager.isAutoPasteEnabled) }
@@ -130,8 +130,8 @@ fun SettingsScreen(historyManager: HistoryManager) {
         BubblePreview(bubbleOpacity, bubbleSize, bubbleShape, bubbleTheme)
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 14.dp)) {
-            Text("Opacity", style = Ditto.type.body, color = c.text, modifier = Modifier.weight(1f))
-            Text("${(bubbleOpacity * 100).roundToInt()}%", style = Ditto.type.monoSmall, color = c.primary)
+            Text("Opacity", style = Linen.type.body, color = c.text, modifier = Modifier.weight(1f))
+            Text("${(bubbleOpacity * 100).roundToInt()}%", style = Linen.type.monoSmall, color = c.primary)
         }
         Slider(
             value = bubbleOpacity,
@@ -278,7 +278,7 @@ fun SettingsScreen(historyManager: HistoryManager) {
 @Composable
 private fun ChoiceGroup(label: String, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     Column(Modifier.padding(top = 14.dp)) {
-        Text(label, style = Ditto.type.body, color = Ditto.colors.text)
+        Text(label, style = Linen.type.body, color = Linen.colors.text)
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth(), content = content)
         Spacer(Modifier.height(14.dp))
@@ -288,7 +288,7 @@ private fun ChoiceGroup(label: String, content: @Composable androidx.compose.fou
 
 @Composable
 private fun BubblePreview(opacity: Float, size: BubbleSize, shape: BubbleShape, theme: BubbleTheme) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val outline = RoundedCornerShape(16.dp)
     Box(
         Modifier
@@ -335,17 +335,17 @@ private fun BubblePreview(opacity: Float, size: BubbleSize, shape: BubbleShape, 
 
 @Composable
 private fun TextDialog(title: String, body: String, mono: Boolean, onDismiss: () -> Unit) {
-    val c = Ditto.colors
+    val c = Linen.colors
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title, style = Ditto.type.title, color = c.text) },
+        title = { Text(title, style = Linen.type.title, color = c.text) },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(body, style = if (mono) Ditto.type.monoTiny else Ditto.type.bodySecondary, color = c.text)
+                Text(body, style = if (mono) Linen.type.monoTiny else Linen.type.bodySecondary, color = c.text)
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close", style = Ditto.type.label, color = c.primary) }
+            TextButton(onClick = onDismiss) { Text("Close", style = Linen.type.label, color = c.primary) }
         },
         containerColor = c.surface,
         shape = RoundedCornerShape(24.dp)

@@ -39,18 +39,18 @@ import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.HistoryItem
 import com.walsoup.ditto.data.HistoryManager
-import com.walsoup.ditto.theme.Ditto
-import com.walsoup.ditto.ui.design.ActionButton
-import com.walsoup.ditto.ui.design.ActionStyle
-import com.walsoup.ditto.ui.design.EmptyNote
-import com.walsoup.ditto.ui.design.GroupLabel
-import com.walsoup.ditto.ui.design.Hairline
-import com.walsoup.ditto.ui.design.PageHeader
-import com.walsoup.ditto.ui.design.RoundIconButton
-import com.walsoup.ditto.ui.design.ScreenMargin
-import com.walsoup.ditto.ui.design.SettingLine
-import com.walsoup.ditto.ui.design.SwitchLine
-import com.walsoup.ditto.ui.design.TrackRow
+import com.walsoup.linen.Linen
+import com.walsoup.linen.ActionButton
+import com.walsoup.linen.ActionStyle
+import com.walsoup.linen.EmptyState
+import com.walsoup.linen.GroupLabel
+import com.walsoup.linen.Hairline
+import com.walsoup.linen.PageHeader
+import com.walsoup.linen.RoundIconButton
+import com.walsoup.linen.ScreenMargin
+import com.walsoup.linen.SettingLine
+import com.walsoup.linen.SwitchLine
+import com.walsoup.linen.TrackRow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -83,7 +83,7 @@ fun LibraryScreen(
     playerHelper: AudioPlayerHelper,
     snackbarHostState: SnackbarHostState
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val history by historyManager.history.collectAsState()
@@ -114,7 +114,7 @@ fun LibraryScreen(
                 }
             )
             if (history.isEmpty()) {
-                EmptyNote(if (historyEnabled) "No notes yet. Tap Record to make your first one." else "History is off.")
+                EmptyState(if (historyEnabled) "No notes yet. Tap Record to make your first one." else "History is off.")
             }
         }
 
@@ -224,11 +224,11 @@ fun LibraryScreen(
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Delete all notes?", style = Ditto.type.title, color = c.text) },
+            title = { Text("Delete all notes?", style = Linen.type.title, color = c.text) },
             text = {
                 Text(
                     "This removes ${history.size} notes from this phone. It can't be undone.",
-                    style = Ditto.type.bodySecondary,
+                    style = Linen.type.bodySecondary,
                     color = c.textSecondary
                 )
             },
@@ -238,10 +238,10 @@ fun LibraryScreen(
                     playingId = null
                     historyManager.clearHistory()
                     confirmClear = false
-                }) { Text("Delete all", style = Ditto.type.label, color = c.rec) }
+                }) { Text("Delete all", style = Linen.type.label, color = c.rec) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClear = false }) { Text("Cancel", style = Ditto.type.label, color = c.primary) }
+                TextButton(onClick = { confirmClear = false }) { Text("Cancel", style = Linen.type.label, color = c.primary) }
             },
             containerColor = c.surface,
             shape = RoundedCornerShape(24.dp)

@@ -45,6 +45,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,22 +68,22 @@ import com.walsoup.ditto.core.audio.AudioRecorderEngine
 import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.service.FloatingBubbleService
-import com.walsoup.ditto.theme.Ditto
-import com.walsoup.ditto.theme.DittoTheme
+import com.walsoup.linen.Linen
+import com.walsoup.linen.LinenTheme
 import com.walsoup.ditto.ui.AppSelectionDialog
 import com.walsoup.ditto.ui.LibraryScreen
 import com.walsoup.ditto.ui.RecordSheetHost
 import com.walsoup.ditto.ui.RecordStage
 import com.walsoup.ditto.ui.SettingsScreen
-import com.walsoup.ditto.ui.design.EmptyNote
-import com.walsoup.ditto.ui.design.PageHeader
-import com.walsoup.ditto.ui.design.RecordDock
-import com.walsoup.ditto.ui.design.ScreenMargin
-import com.walsoup.ditto.ui.design.SectionTitle
-import com.walsoup.ditto.ui.design.SettingLine
-import com.walsoup.ditto.ui.design.SwitchLine
-import com.walsoup.ditto.ui.design.TextTabs
-import com.walsoup.ditto.ui.design.TrackRow
+import com.walsoup.linen.EmptyState
+import com.walsoup.linen.PageHeader
+import com.walsoup.linen.RecordDock
+import com.walsoup.linen.ScreenMargin
+import com.walsoup.linen.SectionTitle
+import com.walsoup.linen.SettingLine
+import com.walsoup.linen.SwitchLine
+import com.walsoup.linen.TextTabs
+import com.walsoup.linen.TrackRow
 import com.walsoup.ditto.ui.trackSubtitle
 import com.walsoup.ditto.ui.trackTitle
 import java.io.File
@@ -113,7 +115,7 @@ class MainActivity : ComponentActivity() {
         historyManager = HistoryManager(this)
 
         setContent {
-            DittoTheme {
+            LinenTheme {
                 AppRoot(recorderEngine, playerHelper, historyManager)
             }
         }
@@ -132,7 +134,7 @@ fun AppRoot(
     playerHelper: AudioPlayerHelper,
     historyManager: HistoryManager
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var selectedTab by rememberSaveable { mutableStateOf(ScreenTab.RECORD) }
@@ -184,11 +186,14 @@ fun AppRoot(
                         .background(c.bg)
                         .navigationBarsPadding()
                 ) {
+                    val elapsedMs by recorderEngine.durationMs.collectAsState()
+                    val level by recorderEngine.amplitude.collectAsState()
                     RecordDock(
-                        durationFlow = recorderEngine.durationMs,
-                        amplitudeFlow = recorderEngine.amplitude,
+                        elapsedMs = { elapsedMs },
+                        level = { level },
                         isRecording = isRecording,
-                        onRecord = startRecording
+                        onRecord = startRecording,
+                        icon = Icons.Default.Mic
                     )
                     TextTabs(
                         tabs = ScreenTab.entries,
@@ -237,7 +242,7 @@ fun HomeScreen(
     permissions: PermissionsState,
     onOpenLibrary: () -> Unit
 ) {
-    val c = Ditto.colors
+    val c = Linen.colors
     val context = LocalContext.current
     val history by historyManager.history.collectAsState()
     val isPlaying by playerHelper.isPlaying.collectAsState()
@@ -316,7 +321,7 @@ fun HomeScreen(
                         text = {
                             Text(
                                 f.displayName,
-                                style = if (f == defaultFilter) Ditto.type.label else Ditto.type.body,
+                                style = if (f == defaultFilter) Linen.type.label else Linen.type.body,
                                 color = if (f == defaultFilter) c.primary else c.text
                             )
                         },
@@ -341,7 +346,7 @@ fun HomeScreen(
 
         SectionTitle("Recent")
         if (history.isEmpty()) {
-            EmptyNote("No notes yet. Tap Record to make your first one.")
+            EmptyState("No notes yet. Tap Record to make your first one.")
         } else {
             history.take(3).forEachIndexed { i, item ->
                 TrackRow(

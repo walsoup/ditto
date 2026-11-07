@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
+import com.walsoup.ditto.core.audio.PastePolicy
 import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.linen.Linen
@@ -89,7 +91,8 @@ fun BoxScope.RecordSheetHost(
     recorderEngine: AudioRecorderEngine,
     playerHelper: AudioPlayerHelper,
     historyManager: HistoryManager,
-    lastTargetPackage: String?
+    lastTargetPackage: String?,
+    snackbarHostState: SnackbarHostState
 ) {
     val c = Linen.colors
     var keepOnDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -152,6 +155,7 @@ fun BoxScope.RecordSheetHost(
                         playerHelper = playerHelper,
                         historyManager = historyManager,
                         lastTargetPackage = lastTargetPackage,
+                        snackbarHostState = snackbarHostState,
                         registerKeep = { keepOnDismiss = it },
                         close = { onStageChange(RecordStage.Idle) }
                     )
@@ -246,6 +250,7 @@ private fun ReviewContent(
     playerHelper: AudioPlayerHelper,
     historyManager: HistoryManager,
     lastTargetPackage: String?,
+    snackbarHostState: SnackbarHostState,
     registerKeep: ((() -> Unit)?) -> Unit,
     close: () -> Unit
 ) {
@@ -333,7 +338,10 @@ private fun ReviewContent(
                 enabled = !busy,
                 onClick = {
                     finish(lastTargetPackage) { file ->
-                        AudioFileManager.pasteIntoApp(context, file, lastTargetPackage, historyManager.isAutoPasteEnabled)
+                        val launched = AudioFileManager.pasteIntoApp(context, file, lastTargetPackage, historyManager.isAutoPasteEnabled)
+                        if (!launched) {
+                            scope.launch { snackbarHostState.showSnackbar(PastePolicy.PASTE_FAILED_MESSAGE) }
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()

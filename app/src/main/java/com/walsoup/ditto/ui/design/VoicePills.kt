@@ -7,13 +7,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.walsoup.ditto.core.audio.VoiceFilter
-import com.walsoup.linen.Pill
+import com.walsoup.ditto.ui.tumble.TumblePill
 
 @Composable
 fun VoicePills(selected: VoiceFilter, onSelect: (VoiceFilter) -> Unit, modifier: Modifier = Modifier) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = modifier) {
         items(VoiceFilter.entries) { f ->
-            Pill(text = f.shortName, selected = f == selected, onClick = { onSelect(f) })
+            TumblePill(text = f.shortName, selected = f == selected, onClick = { onSelect(f) })
         }
     }
 }

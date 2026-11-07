@@ -19,7 +19,7 @@ android {
     compileSdk = 36
     defaultConfig {
         applicationId = "com.walsoup.ditto"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 9
         versionName = "1.0.1"
@@ -46,6 +46,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Side-by-side with the release install during the tumble migration.
+            applicationIdSuffix = ".debug"
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -106,6 +110,7 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(project(":design"))
+  implementation(project(":seaglass-compose"))
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

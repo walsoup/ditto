@@ -32,3 +32,10 @@ plugins {
 rootProject.name = "Ditto"
 include(":app")
 include(":design")
+// Tumble / Shore sea-glass kit, vendored under linen-tumble/. Included by path so
+// Ditto's toolchain (AGP/Kotlin/Gradle) builds them; see linen-tumble/AGENTS.md.
+include(":seaglass-core")
+project(":seaglass-core").projectDir = file("linen-tumble/seaglass-core")
+include(":seaglass-compose")
+project(":seaglass-compose").projectDir = file("linen-tumble/seaglass-compose")
+project(":seaglass-compose").buildFileName = "ditto.build.gradle.kts"

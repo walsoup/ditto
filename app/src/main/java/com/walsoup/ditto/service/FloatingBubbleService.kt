@@ -85,6 +85,7 @@ import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.core.audio.AudioPlayerHelper
 import com.walsoup.ditto.core.audio.AudioRecorderEngine
+import com.walsoup.ditto.core.audio.PastePolicy
 import com.walsoup.ditto.core.audio.VoiceFilter
 import com.walsoup.ditto.data.AppFilterPolicy
 import com.walsoup.ditto.data.HistoryManager
@@ -317,11 +318,11 @@ class FloatingBubbleService : Service() {
             selectedFilter.value = VoiceFilter.RAW
             activePlayableFile.value = file
             if (historyManager.isAutoPasteEnabled) {
-                val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
-                    AudioFormatType.M4A
-                } else {
+                val foregroundPkg = DittoAccessibilityService.currentForegroundPackage.value
+                val targetFormat = PastePolicy.targetFormatForPackage(
+                    foregroundPkg,
                     historyManager.selectedFormat
-                }
+                )
                 serviceScope.launch {
                     val fileToSend = withContext(Dispatchers.IO) {
                         AudioFileManager.generateFilteredAudio(
@@ -338,7 +339,8 @@ class FloatingBubbleService : Service() {
                             durationMs = currentDuration,
                             filter = VoiceFilter.RAW,
                             format = targetFormat,
-                            historyManager = historyManager
+                            historyManager = historyManager,
+                            targetPackage = PastePolicy.autoStopTargetPackage(foregroundPkg)
                         )
                         collapseOverlay()
                     }
@@ -680,11 +682,10 @@ class FloatingBubbleService : Service() {
                                             selectedFilter.value = filter
                                             val original = recordedWavFile.value
                                             if (original != null) {
-                                                val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
-                                                    AudioFormatType.M4A
-                                                } else {
+                                                val targetFormat = PastePolicy.targetFormatForPackage(
+                                                    DittoAccessibilityService.currentForegroundPackage.value,
                                                     historyManager.selectedFormat
-                                                }
+                                                )
                                                 scope.launch {
                                                     val filtered = withContext(Dispatchers.IO) {
                                                         AudioFileManager.generateFilteredAudio(
@@ -728,7 +729,10 @@ class FloatingBubbleService : Service() {
                                         val original = recordedWavFile.value
                                         val existingPrepared = activePlayableFile.value
                                         if (original != null) {
-                                            val targetFormat = if (isWhatsApp) AudioFormatType.M4A else historyManager.selectedFormat
+                                            val targetFormat = PastePolicy.targetFormatForPackage(
+                                                currentPkg,
+                                                historyManager.selectedFormat
+                                            )
                                             scope.launch {
                                                 val fileToSend = if (existingPrepared != null &&
                                                     ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
@@ -806,11 +810,10 @@ class FloatingBubbleService : Service() {
                                         val original = recordedWavFile.value
                                         val existingPrepared = activePlayableFile.value
                                         if (original != null) {
-                                            val targetFormat = if (DittoAccessibilityService.currentForegroundPackage.value?.contains("whatsapp") == true) {
-                                                AudioFormatType.M4A
-                                            } else {
+                                            val targetFormat = PastePolicy.targetFormatForPackage(
+                                                DittoAccessibilityService.currentForegroundPackage.value,
                                                 historyManager.selectedFormat
-                                            }
+                                            )
                                             scope.launch {
                                                 val fileToSend = if (existingPrepared != null &&
                                                     ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||

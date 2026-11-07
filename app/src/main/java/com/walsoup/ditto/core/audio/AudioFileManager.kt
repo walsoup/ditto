@@ -77,7 +77,7 @@ object AudioFileManager {
                         if (pasted) {
                             Toast.makeText(context, "Audio pasted automatically!", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, PastePolicy.PASTE_FAILED_MESSAGE, Toast.LENGTH_LONG).show()
                         }
                     }
                 }, 200)
@@ -153,7 +153,10 @@ object AudioFileManager {
         context.startActivity(launch)
         if (autoPaste) {
             Handler(Looper.getMainLooper()).postDelayed({
-                DittoAccessibilityService.instance?.performDirectPaste()
+                val pasted = DittoAccessibilityService.instance?.performDirectPaste() ?: false
+                if (!pasted) {
+                    Toast.makeText(context, PastePolicy.PASTE_FAILED_MESSAGE, Toast.LENGTH_LONG).show()
+                }
             }, 900)
         }
         return true

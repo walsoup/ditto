@@ -7,16 +7,15 @@
 - **Package & Application ID**: Always use `com.walsoup.<appname_lowercase>` (never use boilerplate `com.example.*`).
 - **FileProvider Authority**: Use `${applicationId}.provider` in `AndroidManifest.xml` and `"${context.packageName}.provider"` in Kotlin.
 
-## 2. UI/UX Design System (Pastel Material 3)
-- **UI**: build every screen with the Linen design system; follow `design/AGENTS.md`.
-- **Palette**: Flat Pastel Material 3 using the 60-30-10 rule:
-  - 60% Base: Warm linen cream (`#FAF9F6`) and clean white card backgrounds (`#FFFFFF`).
-  - 30% Structure: Soft sage containers (`#E8F1EC`), hairline borders (`#E0E6E2`), slate text (`#1F2421`).
-  - 10% Accent: Deep forest sage (`#2D6A4F`) for primary actions, warm terracotta (`#D47255`) for recording/stop states.
+## 2. UI/UX Design System (Tumble / Shore sea glass)
+- **UI**: build every screen with the Tumble / Shore design language; follow `linen-tumble/AGENTS.md`. Ditto's adoption layer lives in `app/.../ui/tumble/` (`DittoHomePalette`, `LocalTumbleStage`, `TumbleGround`).
+- **Migration**: strangler pattern. `LinenTheme` stays outermost in `MainActivity` while pieces migrate to glass one by one. New glass goes through `ui/tumble/`; do not add new Linen components.
+- **Tumble roles for Ditto**: home = Seafoam primary actions; Milk (day) / Obsidian (night) neutrals; Ember = recording/stop/destructive (replaces terracotta); Cobalt = info, Kelp = success, Amber = warning.
 - **Strict Visual Invariants**:
-  - **NO PURPLE**: Do not use neon purple or violet accents.
-  - **NO GRADIENTS**: Use solid flat surfaces and subtle Material 3 tonal elevations.
-  - **NO GLOW/NEON EFFECTS**: Keep visual complexity low and clean.
+  - **NO PURPLE**: never use the Sea Lavender palette.
+  - **NO GRADIENTS**: flat solid grounds only (no gradient backdrops). Kit-internal glass frost shading is the material, not a gradient.
+  - **NO GLOW/NEON EFFECTS**: never use Citrine glow.
+  - **GLASS IS SCARCE**: ~12 pieces per view, max 2 deep. Text, rows and dividers stay etched on Linen.
 
 ## 3. Ergonomics & Audio Recording Controls
 - **NO Large Circular Record Buttons**: Do not generate oversized circular FABs for recording.
@@ -41,4 +40,4 @@
 - **Device Deployment**:
   - Detect attached devices via `adb devices`.
   - Install built debug APKs with `adb install -r -d <apk-path>`.
-  - Launch main activity with `adb shell am start -n <applicationId>/.MainActivity`.
+  - Launch main activity with `adb shell am start -n <applicationId>/<namespace>.MainActivity` (debug id is `com.walsoup.ditto.debug`; the `.MainActivity` shorthand does not resolve with the debug suffix).

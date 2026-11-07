@@ -43,6 +43,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.material.icons.Icons
@@ -75,6 +76,9 @@ import com.walsoup.ditto.ui.LibraryScreen
 import com.walsoup.ditto.ui.RecordSheetHost
 import com.walsoup.ditto.ui.RecordStage
 import com.walsoup.ditto.ui.SettingsScreen
+import com.walsoup.ditto.ui.tumble.DittoHomePalette
+import com.walsoup.ditto.ui.tumble.LocalTumbleStage
+import com.walsoup.ditto.ui.tumble.TumbleGround
 import com.walsoup.linen.EmptyState
 import com.walsoup.linen.PageHeader
 import com.walsoup.linen.RecordDock
@@ -84,6 +88,8 @@ import com.walsoup.linen.SettingLine
 import com.walsoup.linen.SwitchLine
 import com.walsoup.linen.TextTabs
 import com.walsoup.linen.TrackRow
+import dev.seaglass.compose.SeaGlassStageHost
+import dev.seaglass.compose.SeaGlassTheme
 import com.walsoup.ditto.ui.trackSubtitle
 import com.walsoup.ditto.ui.trackTitle
 import java.io.File
@@ -116,7 +122,16 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LinenTheme {
-                AppRoot(recorderEngine, playerHelper, historyManager)
+                SeaGlassTheme(palette = DittoHomePalette) {
+                    SeaGlassStageHost(
+                        modifier = Modifier.fillMaxSize(),
+                        background = { TumbleGround() },
+                    ) { stage ->
+                        CompositionLocalProvider(LocalTumbleStage provides stage) {
+                            AppRoot(recorderEngine, playerHelper, historyManager)
+                        }
+                    }
+                }
             }
         }
     }
@@ -230,7 +245,8 @@ fun AppRoot(
             recorderEngine = recorderEngine,
             playerHelper = playerHelper,
             historyManager = historyManager,
-            lastTargetPackage = lastTargetPackage
+            lastTargetPackage = lastTargetPackage,
+            snackbarHostState = snackbarHostState
         )
     }
 }

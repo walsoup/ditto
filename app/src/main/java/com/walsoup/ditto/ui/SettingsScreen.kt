@@ -50,6 +50,7 @@ import com.walsoup.ditto.data.BubbleTheme
 import com.walsoup.ditto.data.HistoryManager
 import com.walsoup.ditto.isAccessibilityServiceEnabled
 import com.walsoup.linen.Linen
+import com.walsoup.linen.LinenDimens
 import com.walsoup.linen.Hairline
 import com.walsoup.linen.PageHeader
 import com.walsoup.linen.Pill
@@ -327,8 +328,10 @@ fun SettingsScreen(historyManager: HistoryManager) {
             },
             confirmButton = {
                 TextButton(onClick = {
-                    historyManager.clearHistory()
-                    storageBytes = historyManager.storageUsedBytes()
+                    // Deletion is async; re-read storage only once the files are actually gone.
+                    historyManager.clearHistory {
+                        storageBytes = historyManager.storageUsedBytes()
+                    }
                     confirmClearStorage = false
                 }) { Text("Clear", style = Linen.type.label, color = c.rec) }
             },
@@ -336,7 +339,7 @@ fun SettingsScreen(historyManager: HistoryManager) {
                 TextButton(onClick = { confirmClearStorage = false }) { Text("Cancel", style = Linen.type.label, color = c.primary) }
             },
             containerColor = c.surface,
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(LinenDimens.DialogRadius)
         )
     }
 }
@@ -426,6 +429,6 @@ private fun TextDialog(title: String, body: String, mono: Boolean, onDismiss: ()
             TextButton(onClick = onDismiss) { Text("Close", style = Linen.type.label, color = c.primary) }
         },
         containerColor = c.surface,
-        shape = RoundedCornerShape(24.dp)
+        shape = RoundedCornerShape(LinenDimens.DialogRadius)
     )
 }

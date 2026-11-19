@@ -98,9 +98,11 @@ object AudioFileManager {
 
     /**
      * Unified helper: exports the take into [format], copies it to the system clipboard
-     * and commits it to history via `HistoryManager.commitRecording`. Performs no encode
-     * itself. After a successful commit the raw take and any unused preview file are
-     * deleted, unless they are the committed file. Function name kept for existing callers.
+     * and commits it to history via `HistoryManager.commitRecording`. When [file] is already
+     * in [format] (e.g. the caller exported it itself) [exportFile] returns it unchanged —
+     * re-encoding an M4A as if it were raw PCM corrupts it. After a successful commit the
+     * raw take and any unused preview file are deleted, unless they are the committed file.
+     * Function name kept for existing callers.
      */
     fun copyAndRecordToHistory(
         context: Context,
@@ -121,12 +123,12 @@ object AudioFileManager {
         // Commit before handing the URI to the clipboard: commitRecording MOVES the file into
         // filesDir, so a clipboard/share URI built from the cache path would go dead before the
         // receiving app reads it.
+        // commitRecording derives the stored format from the file on disk: a failed AAC
+        // export falls back to WAV and must not be recorded or renamed as M4A.
         val committed = historyManager.commitRecording(
             sourceFile = exported,
             durationMs = durationMs,
             filter = filter,
-            // Record what is actually on disk: a failed AAC export falls back to WAV.
-            format = if (exported.name.endsWith(".m4a", ignoreCase = true)) AudioFormatType.M4A else AudioFormatType.WAV,
             targetPackage = targetPackage
         )
         val sendFile = committed?.filePath?.let { File(it) }?.takeIf { it.exists() } ?: exported
@@ -243,6 +245,10 @@ object AudioFileManager {
     ): File {
         if (!inputFile.exists()) {
             Log.w("Ditto", "AudioFileManager.exportFile: input missing: ${inputFile.absolutePath}")
+            return inputFile
+        }
+        // Already exported: re-encoding an encoded container as raw PCM corrupts it.
+        if (isEncodedContainerExtension(inputFile.extension)) {
             return inputFile
         }
         val wav = previewFile(context, inputFile, filter)

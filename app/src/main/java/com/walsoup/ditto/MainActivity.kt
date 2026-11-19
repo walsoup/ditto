@@ -136,12 +136,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // Every activity instance registers its own prefs listener via its HistoryManager;
+        // always unregister it, or listeners accumulate across rotations.
+        historyManager.close()
         // Rotation recreates the activity without finishing: keep the take, the mic and the
         // player alive (they live in the ViewModel). Only tear down when the user really leaves.
         if (isFinishing) {
             recordStageModel.playerHelper.stop()
             recordStageModel.recorderEngine.cancelRecording()
-            historyManager.close()
         }
     }
 }

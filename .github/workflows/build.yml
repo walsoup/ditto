@@ -1,6 +1,15 @@
 name: Build APK
 
 on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+      - '*.*.*-alpha'
   workflow_dispatch:
     inputs:
       build_type:
@@ -11,37 +20,40 @@ on:
         options:
           - release
           - debug
-  push:
-    branches:
-      - master
-    tags:
-      - 'v*'
-      - '*.*.*-alpha'
 
 permissions:
   contents: read
 
+# A newer push to the same branch/tag cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
-      - name: Configure Keystore from Secrets (if provided)
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Configure Keystore from Secrets (release only)
         if: ${{ github.event_name == 'push' || inputs.build_type == 'release' }}
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -49,28 +61,42 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ]; then
+          set -eu
+          if [ -n "${KEYSTORE_BASE64:-}" ]; then
             echo "$KEYSTORE_BASE64" | base64 -d > release.jks
-            echo "KEYSTORE_PATH=../release.jks" >> .env
-            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> .env
-            echo "KEY_ALIAS=$KEY_ALIAS" >> .env
-            echo "KEY_PASSWORD=$KEY_PASSWORD" >> .env
+            {
+              echo "KEYSTORE_PATH=../release.jks"
+              echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+              echo "KEY_ALIAS=$KEY_ALIAS"
+              echo "KEY_PASSWORD=$KEY_PASSWORD"
+            } >> .env
             echo "Signing keys configured from GitHub secrets."
+          elif [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            echo "::error::KEYSTORE_BASE64 is not set. Refusing to attach a debug-signed APK to a release tag."
+            exit 1
           else
-            echo "No KEYSTORE_BASE64 secret provided. Gradle will fall back to debug signing."
+            echo "::warning::No KEYSTORE_BASE64 secret. Gradle will fall back to debug signing."
           fi
 
-      - name: Build Release APK
-        if: ${{ github.event_name == 'push' || inputs.build_type == 'release' }}
-        run: ./gradlew assembleRelease
-
       - name: Build Debug APK
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' }}
+        if: ${{ github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug') }}
         run: ./gradlew assembleDebug
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Build Release APK
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build_type == 'release') }}
+        run: ./gradlew assembleRelease
+
+      - name: Upload unit test report
+        if: failure()
+        uses: actions/upload-artifact@v7
         with:
-          name: ${{ github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug' && 'ditto-debug-apk' || 'ditto-release-apk' }}
+          name: unit-test-report
+          path: app/build/reports/tests/**
+          if-no-files-found: ignore
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ (github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.build_type == 'debug')) && 'ditto-debug-apk' || 'ditto-release-apk' }}
           path: app/build/outputs/apk/**/*.apk
           if-no-files-found: error

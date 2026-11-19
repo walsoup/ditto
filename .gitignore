@@ -17,3 +17,6 @@ skills-lock.json
 *.key
 *.apk
 
+
+# Abandoned Tumble / sea-glass design kit (see AGENTS.md §2)
+linen-tumble/

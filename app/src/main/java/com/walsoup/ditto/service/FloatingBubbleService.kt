@@ -160,6 +160,8 @@ class FloatingBubbleService : Service() {
     private val exportProgress = MutableStateFlow(0f)
 
     private var stopInFlight = false
+    @Volatile
+    private var cancelStopRequested = false
     private var notifTicker: Job? = null
 
     private var micMuteRegistered = false
@@ -371,6 +373,7 @@ class FloatingBubbleService : Service() {
             Toast.makeText(this, "Microphone is muted", Toast.LENGTH_SHORT).show()
             return false
         }
+        cancelStopRequested = false
         requestMicAudioFocus()
         val started = recorderEngine.startRecording()
         if (started) {
@@ -402,7 +405,13 @@ class FloatingBubbleService : Service() {
                         null
                     }
                 }
-                if (file != null && file.exists()) {
+                if (file != null && file.exists() && cancelStopRequested) {
+                    // The user tapped Cancel while the take was being written: honour it now
+                    // instead of silently keeping, committing and pasting the recording.
+                    cancelStopRequested = false
+                    withContext(Dispatchers.IO) { runCatching { file.delete() } }
+                    collapseOverlay()
+                } else if (file != null && file.exists()) {
                     recordedWavFile.value = file
                     selectedFilter.value = VoiceFilter.RAW
                     activePlayableFile.value = file
@@ -456,6 +465,13 @@ class FloatingBubbleService : Service() {
     }
 
     private fun cancelRecordingInternal() {
+        if (stopInFlight) {
+            // A stop is mid-flight (joining the writer and converting the take): the engine's
+            // file refs are already nulled, so cancelling now would do nothing and the take
+            // would still be saved and pasted. Defer the cancel to the stop coroutine.
+            cancelStopRequested = true
+            return
+        }
         stopNotifTicker()
         abandonMicAudioFocus()
         try {
@@ -1080,7 +1096,6 @@ class FloatingBubbleService : Service() {
                                                                         sourceFile = fileToSend,
                                                                         durationMs = recordedDurationMs.value,
                                                                         filter = selectedFilter.value,
-                                                                        format = targetFormat,
                                                                         targetPackage = currentPkg
                                                                     )
                                                                 }
@@ -1183,8 +1198,7 @@ class FloatingBubbleService : Service() {
                                                             historyManager.commitRecording(
                                                                 sourceFile = fileToSend,
                                                                 durationMs = recordedDurationMs.value,
-                                                                filter = selectedFilter.value,
-                                                                format = targetFormat
+                                                                filter = selectedFilter.value
                                                             )
                                                         }
                                                         val sendFile = committed

@@ -8,10 +8,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.walsoup.ditto.service.DittoAccessibilityService
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 object AudioFileManager {
 
@@ -69,7 +73,7 @@ object AudioFileManager {
                             context.startActivity(shareIntent)
                             Toast.makeText(context, "Audio ready to send in WhatsApp", Toast.LENGTH_SHORT).show()
                         } catch (e: Exception) {
-                            e.printStackTrace()
+                            Log.w("Ditto", "AudioFileManager: WhatsApp share failed: $e")
                             Toast.makeText(context, "Audio copied to clipboard", Toast.LENGTH_SHORT).show()
                         }
                     } else {
@@ -86,14 +90,19 @@ object AudioFileManager {
             }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("Ditto", "AudioFileManager.copyAudioToClipboard failed: $e")
             Toast.makeText(context, "Failed to copy audio: ${e.message}", Toast.LENGTH_SHORT).show()
             false
         }
     }
 
     /**
-     * Unified helper: copies audio to system clipboard and records entry into HistoryManager.
+     * Unified helper: exports the take into [format], copies it to the system clipboard
+     * and commits it to history via `HistoryManager.commitRecording`. When [file] is already
+     * in [format] (e.g. the caller exported it itself) [exportFile] returns it unchanged —
+     * re-encoding an M4A as if it were raw PCM corrupts it. After a successful commit the
+     * raw take and any unused preview file are deleted, unless they are the committed file.
+     * Function name kept for existing callers.
      */
     fun copyAndRecordToHistory(
         context: Context,
@@ -104,26 +113,34 @@ object AudioFileManager {
         historyManager: com.walsoup.ditto.data.HistoryManager,
         targetPackage: String? = null
     ): Boolean {
-        // If target format is M4A but input is WAV, transcode before sending
-        val targetFile = if (format == AudioFormatType.M4A && file.name.endsWith(".wav")) {
-            generateFilteredAudio(context, file, filter, AudioFormatType.M4A)
-        } else {
+        val exported = try {
+            exportFile(context, file, filter, format)
+        } catch (e: Exception) {
+            Log.w("Ditto", "AudioFileManager.copyAndRecordToHistory: export failed: $e")
             file
         }
 
+        // Commit before handing the URI to the clipboard: commitRecording MOVES the file into
+        // filesDir, so a clipboard/share URI built from the cache path would go dead before the
+        // receiving app reads it.
+        // commitRecording derives the stored format from the file on disk: a failed AAC
+        // export falls back to WAV and must not be recorded or renamed as M4A.
+        val committed = historyManager.commitRecording(
+            sourceFile = exported,
+            durationMs = durationMs,
+            filter = filter,
+            targetPackage = targetPackage
+        )
+        val sendFile = committed?.filePath?.let { File(it) }?.takeIf { it.exists() } ?: exported
+
         val success = copyAudioToClipboard(
             context = context,
-            file = targetFile,
+            file = sendFile,
             autoPaste = historyManager.isAutoPasteEnabled
         )
-        if (success) {
-            historyManager.addRecording(
-                file = targetFile,
-                durationMs = durationMs,
-                filter = filter,
-                format = format,
-                targetPackage = targetPackage
-            )
+        if (success && committed != null) {
+            deleteIfNotCommitted(file, committed.filePath)
+            deleteIfNotCommitted(previewCacheFile(context, file, filter), committed.filePath)
         }
         return success
     }
@@ -195,7 +212,117 @@ object AudioFileManager {
     }
 
     /**
-     * Applies the chosen VoiceFilter and encodes into the target AudioFormatType (WAV or M4A).
+     * Returns the filtered audio as a WAV for playback or filter-pill taps.
+     * Never touches the AAC encoder. Results are cached under cacheDir/audio as
+     * `<base>_<filter>_preview.wav` and reused while up to date with the input.
+     */
+    fun previewFile(context: Context, inputFile: File, filter: VoiceFilter): File {
+        if (filter == VoiceFilter.RAW || !inputFile.exists()) return inputFile
+        val preview = previewCacheFile(context, inputFile, filter)
+        if (preview.exists() && preview.length() > 0 && preview.lastModified() >= inputFile.lastModified()) {
+            return preview
+        }
+        applyFilter(inputFile, preview, filter)
+        if (preview.exists() && preview.length() > 0) return preview
+        Log.w("Ditto", "AudioFileManager.previewFile: filter output missing, returning input")
+        return inputFile
+    }
+
+    /**
+     * Produces the real target file in [format] and reports encode progress via [onProgress].
+     * This is the only AAC entry point. On AAC failure it retries once at
+     * [AudioConfig.AAC_FALLBACK_BIT_RATE], then returns the filtered WAV and logs a warning.
+     * Never returns a missing file: worst case the (existing) input file is returned.
+     * Callers must derive the stored format from the returned file's extension, since a
+     * failed AAC export falls back to WAV.
+     */
+    fun exportFile(
+        context: Context,
+        inputFile: File,
+        filter: VoiceFilter,
+        format: AudioFormatType,
+        onProgress: ((Float) -> Unit)? = null
+    ): File {
+        if (!inputFile.exists()) {
+            Log.w("Ditto", "AudioFileManager.exportFile: input missing: ${inputFile.absolutePath}")
+            return inputFile
+        }
+        // Already exported: re-encoding an encoded container as raw PCM corrupts it.
+        if (isEncodedContainerExtension(inputFile.extension)) {
+            return inputFile
+        }
+        val wav = previewFile(context, inputFile, filter)
+        if (format == AudioFormatType.WAV) return wav
+        if (!wav.exists()) {
+            Log.w("Ditto", "AudioFileManager.exportFile: filtered WAV missing, returning input")
+            return inputFile
+        }
+        val audioDir = File(context.cacheDir, "audio").apply { mkdirs() }
+        val dest = File(audioDir, "${inputFile.nameWithoutExtension}_${filter.name.lowercase()}.m4a")
+        if (dest.exists() && dest.length() > 0 && dest.lastModified() >= wav.lastModified()) {
+            return dest
+        }
+        if (encodeToM4a(wav, dest, AudioConfig.AAC_BIT_RATE, onProgress)) return dest
+        Log.w("Ditto", "AudioFileManager.exportFile: AAC encode failed, retrying at fallback bit rate")
+        if (encodeToM4a(wav, dest, AudioConfig.AAC_FALLBACK_BIT_RATE, onProgress)) return dest
+        Log.w("Ditto", "AudioFileManager.exportFile: AAC encode failed twice, returning WAV: ${wav.absolutePath}")
+        try {
+            if (dest.exists() && dest.length() == 0L) dest.delete()
+        } catch (_: Exception) {}
+        return wav
+    }
+
+    private fun encodeToM4a(wav: File, dest: File, bitRate: Int, onProgress: ((Float) -> Unit)?): Boolean {
+        return try {
+            val ok = M4aEncoder.encodePcmToM4a(
+                inputFile = wav,
+                outputFile = dest,
+                sampleRate = AudioConfig.SAMPLE_RATE,
+                channelCount = AudioConfig.CHANNELS,
+                bitRate = bitRate,
+                onProgress = onProgress
+            )
+            ok && dest.exists() && dest.length() > 0
+        } catch (e: Exception) {
+            Log.w("Ditto", "AudioFileManager: AAC encode failed at $bitRate bps: $e")
+            false
+        }
+    }
+
+    /** Bounded-memory streaming filter; falls back to the in-memory path if streaming is unusable. */
+    private fun applyFilter(inputFile: File, outputFile: File, filter: VoiceFilter) {
+        try {
+            VoiceFilterProcessor.processFileStreaming(
+                inputFile = inputFile,
+                outputFile = outputFile,
+                filter = filter
+            )
+        } catch (e: Exception) {
+            Log.w("Ditto", "AudioFileManager: streaming filter failed for $filter, falling back to processAudio: $e")
+            try {
+                VoiceFilterProcessor.processAudio(
+                    inputFile = inputFile,
+                    outputFile = outputFile,
+                    filter = filter
+                )
+            } catch (e2: Exception) {
+                Log.w("Ditto", "AudioFileManager: filter fallback also failed for $filter: $e2")
+            }
+        }
+    }
+
+    private fun previewCacheFile(context: Context, inputFile: File, filter: VoiceFilter): File {
+        return File(
+            File(context.cacheDir, "audio").apply { mkdirs() },
+            "${inputFile.nameWithoutExtension}_${filter.name.lowercase()}_preview.wav"
+        )
+    }
+
+    /**
+     * Applies the chosen VoiceFilter and returns the file in [targetFormat].
+     * Thin delegate kept for existing callers: WAV goes through [previewFile],
+     * M4A through [exportFile]. Click handlers must call those directly
+     * (preview taps -> previewFile, send/share -> exportFile).
      */
     fun generateFilteredAudio(
         context: Context,
@@ -203,30 +330,31 @@ object AudioFileManager {
         filter: VoiceFilter,
         targetFormat: AudioFormatType = AudioFormatType.WAV
     ): File {
-        val audioDir = File(context.cacheDir, "audio").apply { mkdirs() }
-        val baseName = inputFile.nameWithoutExtension
-        val tempWavFile = if (filter == VoiceFilter.RAW) {
-            inputFile
-        } else {
-            val filteredWav = File(audioDir, "${baseName}_${filter.name.lowercase()}.wav")
-            VoiceFilterProcessor.processAudio(
-                inputFile = inputFile,
-                outputFile = filteredWav,
-                filter = filter
-            )
-            filteredWav
-        }
-
         return if (targetFormat == AudioFormatType.M4A) {
-            val m4aFile = File(audioDir, "${baseName}_${filter.name.lowercase()}.m4a")
-            val encoded = M4aEncoder.encodePcmToM4a(tempWavFile, m4aFile)
-            if (encoded && m4aFile.exists()) {
-                m4aFile
-            } else {
-                tempWavFile
-            }
+            exportFile(context, inputFile, filter, targetFormat)
         } else {
-            tempWavFile
+            previewFile(context, inputFile, filter)
+        }
+    }
+
+    /**
+     * Display name for a committed take, e.g. "Ditto 2026-11-19 14-32.m4a".
+     * Digits are locale-independent (Locale.US); the wall-clock zone is the device default.
+     */
+    fun displayNameFor(createdAt: Long, extension: String): String {
+        val ext = extension.removePrefix(".").ifBlank { AudioFormatType.WAV.extension }
+        val stamp = SimpleDateFormat("yyyy-MM-dd HH-mm", Locale.US).format(Date(createdAt))
+        return "Ditto $stamp.$ext"
+    }
+
+    private fun deleteIfNotCommitted(candidate: File, committedPath: String) {
+        try {
+            if (!candidate.exists()) return
+            if (candidate.canonicalPath != File(committedPath).canonicalPath) {
+                candidate.delete()
+            }
+        } catch (e: Exception) {
+            Log.w("Ditto", "AudioFileManager: cleanup delete failed for ${candidate.absolutePath}: $e")
         }
     }
 }

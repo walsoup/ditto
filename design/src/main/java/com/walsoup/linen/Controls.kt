@@ -17,8 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -33,6 +31,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -131,14 +131,12 @@ fun Pill(
             .background(if (selected) c.container else c.surface)
             .border(1.dp, if (selected) c.primary else c.hairline, shape)
             .clickable(role = Role.RadioButton, onClick = onClick)
+            .semantics { this.selected = selected }
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        if (selected) {
-            Icon(Icons.Default.Check, contentDescription = null, tint = c.primary, modifier = Modifier.size(15.dp))
-            Spacer(Modifier.width(5.dp))
-        } else if (leading != null) {
+        if (leading != null) {
             leading()
             Spacer(Modifier.width(6.dp))
         }
@@ -171,6 +169,7 @@ fun <T> TextTabs(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
                     .clickable(role = Role.Tab) { onSelect(tab) }
+                    .semantics { this.selected = isSelected }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
             ) {
                 Text(

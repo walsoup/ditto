@@ -24,7 +24,7 @@ It has no account, no ads, and no `INTERNET` permission. Recording and voice eff
 2. If Android asks, allow your browser or file manager to install unknown apps.
 3. Open Ditto. The home screen shows a **Finish setup** row until the permissions it needs are granted.
 
-The current version is [v1.0.1](https://github.com/walsoup/ditto/releases/tag/v1.0.1).
+The current version is v1.1.0.
 
 ## Using it
 

@@ -7,8 +7,29 @@ enum class AudioFormatType(
     val description: String
 ) {
     WAV("wav", "audio/wav", "WAV", "Uncompressed lossless audio (Universal)"),
-    M4A("m4a", "audio/mp4", "M4A (AAC)", "Compressed high-efficiency audio (AI apps)")
+    M4A("m4a", "audio/mp4", "M4A (AAC)", "Compressed high-efficiency audio (AI apps)");
+
+    companion object {
+        /**
+         * Format implied by a file name's extension. Defaults to WAV for anything that is
+         * not recognisably M4A: the export pipeline only ever produces these two, and a
+         * failed AAC export falls back to WAV, so the extension is the source of truth.
+         */
+        fun forFileName(name: String): AudioFormatType =
+            if (name.substringAfterLast('.').equals(M4A.extension, ignoreCase = true)) M4A else WAV
+    }
 }
+
+/** Extensions of encoded audio containers that must never be fed to the PCM encoder. */
+private val ENCODED_CONTAINER_EXTENSIONS =
+    setOf("m4a", "m4b", "aac", "mp4", "mp3", "ogg", "opus", "flac")
+
+/**
+ * True when [extension] (with or without a leading dot, any case) names an encoded audio
+ * container. Encoding an already-encoded file as if it were raw PCM corrupts it.
+ */
+fun isEncodedContainerExtension(extension: String): Boolean =
+    extension.removePrefix(".").lowercase() in ENCODED_CONTAINER_EXTENSIONS
 
 enum class VoiceFilter(
     val displayName: String,

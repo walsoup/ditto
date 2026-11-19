@@ -2,6 +2,8 @@ package com.walsoup.ditto.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
+import com.walsoup.ditto.core.audio.AudioFileManager
 import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.core.audio.HistoryItem
 import com.walsoup.ditto.core.audio.VoiceFilter
@@ -10,11 +12,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 
 class HistoryManager(private val context: Context) {
 
@@ -28,15 +32,27 @@ class HistoryManager(private val context: Context) {
         private var sharedBubbleIdleDim: MutableStateFlow<Boolean>? = null
         private var sharedBubbleSnapToEdge: MutableStateFlow<Boolean>? = null
         private var sharedVolumeKeyShortcutEnabled: MutableStateFlow<Boolean>? = null
+        private var sharedHistory: MutableStateFlow<List<HistoryItem>>? = null
+        /**
+         * Single-threaded writer shared by every HistoryManager instance in the process.
+         * All JSON persistence goes through [historyWriteScope], so two saves can never
+         * interleave and clearHistory cannot race an add.
+         */
+        private val historyWriteScope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
     }
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    /** Instance alias for the shared single-threaded writer; never replace with a multi-threaded scope. */
+    private val scope: CoroutineScope get() = historyWriteScope
     private val prefs: SharedPreferences =
         context.getSharedPreferences("ditto_settings", Context.MODE_PRIVATE)
 
     private val historyFile = File(context.filesDir, "recordings_history.json")
 
-    private val _history = MutableStateFlow<List<HistoryItem>>(emptyList())
+    private val _history: MutableStateFlow<List<HistoryItem>> = synchronized(HistoryManager::class.java) {
+        sharedHistory ?: MutableStateFlow<List<HistoryItem>>(emptyList()).also {
+            sharedHistory = it
+        }
+    }
     val history: StateFlow<List<HistoryItem>> = _history.asStateFlow()
 
     private val _isAppFilterEnabled: MutableStateFlow<Boolean> = synchronized(HistoryManager::class.java) {
@@ -148,6 +164,8 @@ class HistoryManager(private val context: Context) {
     init {
         prefs.registerOnSharedPreferenceChangeListener(prefChangeListener)
         loadHistory()
+        // Runs on the same single-threaded writer, so it executes after the load above.
+        pruneMissingFiles()
     }
 
     var isHistoryEnabled: Boolean
@@ -320,10 +338,72 @@ class HistoryManager(private val context: Context) {
                 }
                 _history.value = list.sortedByDescending { it.createdAt }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.w("Ditto", "HistoryManager: failed to load history: $e")
                 _history.value = emptyList()
             }
         }
+    }
+
+    /**
+     * Moves [sourceFile] into `filesDir/recordings/` under a display name, appends the
+     * entry to the shared history and persists. Returns the committed item, or null when
+     * history is disabled (the file is left alone and nothing is deleted) or the move fails.
+     */
+    fun commitRecording(
+        sourceFile: File,
+        durationMs: Long,
+        filter: VoiceFilter,
+        format: AudioFormatType,
+        targetPackage: String? = null
+    ): HistoryItem? {
+        if (!isHistoryEnabled) return null
+        if (!sourceFile.exists()) {
+            Log.w("Ditto", "HistoryManager.commitRecording: source missing: ${sourceFile.absolutePath}")
+            return null
+        }
+        val createdAt = System.currentTimeMillis()
+        val recordingsDir = File(context.filesDir, "recordings").apply { mkdirs() }
+        val dest = uniqueFile(recordingsDir, AudioFileManager.displayNameFor(createdAt, format.extension))
+        try {
+            if (!sourceFile.renameTo(dest)) {
+                sourceFile.copyTo(dest, overwrite = true)
+                sourceFile.delete()
+            }
+        } catch (e: Exception) {
+            Log.w("Ditto", "HistoryManager.commitRecording: failed to move ${sourceFile.absolutePath}: $e")
+            return null
+        }
+        if (!dest.exists()) {
+            Log.w("Ditto", "HistoryManager.commitRecording: destination missing after move: ${dest.absolutePath}")
+            return null
+        }
+        val item = HistoryItem(
+            id = "${createdAt}-${UUID.randomUUID()}",
+            fileName = dest.name,
+            filePath = dest.absolutePath,
+            durationMs = durationMs,
+            format = format,
+            filter = filter,
+            createdAt = createdAt,
+            targetPackage = targetPackage
+        )
+        _history.update { current -> listOf(item) + current }
+        saveHistoryToFile(_history.value)
+        return item
+    }
+
+    private fun uniqueFile(dir: File, name: String): File {
+        var candidate = File(dir, name)
+        if (!candidate.exists()) return candidate
+        val dot = name.lastIndexOf('.')
+        val stem = if (dot > 0) name.substring(0, dot) else name
+        val ext = if (dot > 0) name.substring(dot) else ""
+        var i = 2
+        while (candidate.exists()) {
+            candidate = File(dir, "$stem-$i$ext")
+            i++
+        }
+        return candidate
     }
 
     fun addRecording(
@@ -333,22 +413,7 @@ class HistoryManager(private val context: Context) {
         format: AudioFormatType,
         targetPackage: String? = null
     ) {
-        if (!isHistoryEnabled) return
-
-        val item = HistoryItem(
-            id = System.currentTimeMillis().toString(),
-            fileName = file.name,
-            filePath = file.absolutePath,
-            durationMs = durationMs,
-            format = format,
-            filter = filter,
-            createdAt = System.currentTimeMillis(),
-            targetPackage = targetPackage
-        )
-
-        val updated = listOf(item) + _history.value
-        _history.value = updated
-        saveHistoryToFile(updated)
+        commitRecording(file, durationMs, filter, format, targetPackage)
     }
 
     fun addRecording(
@@ -361,22 +426,20 @@ class HistoryManager(private val context: Context) {
         val filter = VoiceFilter.entries.find {
             it.name.equals(filterName, ignoreCase = true) || it.displayName.equals(filterName, ignoreCase = true)
         } ?: VoiceFilter.RAW
-        addRecording(file, durationMs, filter, format, targetPackage)
+        commitRecording(file, durationMs, filter, format, targetPackage)
     }
 
     fun stageDeleteItem(id: String): HistoryItem? {
         val item = _history.value.find { it.id == id } ?: return null
-        val updated = _history.value.filterNot { it.id == id }
-        _history.value = updated
-        saveHistoryToFile(updated)
+        _history.update { current -> current.filterNot { it.id == id } }
+        saveHistoryToFile(_history.value)
         return item
     }
 
     fun restoreItem(item: HistoryItem) {
         if (!isHistoryEnabled) return
-        val updated = (listOf(item) + _history.value.filterNot { it.id == item.id }).sortedByDescending { it.createdAt }
-        _history.value = updated
-        saveHistoryToFile(updated)
+        _history.update { current -> (listOf(item) + current.filterNot { it.id == item.id }).sortedByDescending { it.createdAt } }
+        saveHistoryToFile(_history.value)
     }
 
     fun permanentlyDeleteFile(filePath: String) {
@@ -394,9 +457,8 @@ class HistoryManager(private val context: Context) {
                 File(it.filePath).delete()
             } catch (_: Exception) {}
         }
-        val updated = _history.value.filterNot { it.id == id }
-        _history.value = updated
-        saveHistoryToFile(updated)
+        _history.update { current -> current.filterNot { it.id == id } }
+        saveHistoryToFile(_history.value)
     }
 
     fun clearHistory() {
@@ -415,26 +477,67 @@ class HistoryManager(private val context: Context) {
     }
 
     private fun saveHistoryToFile(list: List<HistoryItem>) {
-        scope.launch {
-            try {
-                val array = JSONArray()
-                for (item in list) {
-                    val obj = JSONObject().apply {
-                        put("id", item.id)
-                        put("fileName", item.fileName)
-                        put("filePath", item.filePath)
-                        put("durationMs", item.durationMs)
-                        put("format", item.format.name)
-                        put("filterName", item.filter.name)
-                        put("createdAt", item.createdAt)
-                        item.targetPackage?.let { put("targetPackage", it) }
-                    }
-                    array.put(obj)
+        scope.launch { writeHistoryFile(list) }
+    }
+
+    private fun writeHistoryFile(list: List<HistoryItem>) {
+        try {
+            val array = JSONArray()
+            for (item in list) {
+                val obj = JSONObject().apply {
+                    put("id", item.id)
+                    put("fileName", item.fileName)
+                    put("filePath", item.filePath)
+                    put("durationMs", item.durationMs)
+                    put("format", item.format.name)
+                    put("filterName", item.filter.name)
+                    put("createdAt", item.createdAt)
+                    item.targetPackage?.let { put("targetPackage", it) }
                 }
-                historyFile.writeText(array.toString())
-            } catch (e: Exception) {
-                e.printStackTrace()
+                array.put(obj)
             }
+            historyFile.writeText(array.toString())
+        } catch (e: Exception) {
+            Log.w("Ditto", "HistoryManager: failed to save history: $e")
+        }
+    }
+
+    /**
+     * Drops entries whose audio file no longer exists and rewrites the JSON once
+     * when anything was dropped.
+     */
+    fun pruneMissingFiles() {
+        scope.launch {
+            val current = _history.value
+            if (current.isEmpty()) return@launch
+            val kept = current.filter { File(it.filePath).exists() }
+            if (kept.size != current.size) {
+                _history.value = kept
+                writeHistoryFile(kept)
+            }
+        }
+    }
+
+    /** Total bytes of audio currently stored under filesDir/recordings. */
+    fun storageUsedBytes(): Long {
+        val dir = File(context.filesDir, "recordings")
+        if (!dir.isDirectory) return 0L
+        return try {
+            dir.listFiles()?.sumOf { if (it.isFile) it.length() else 0L } ?: 0L
+        } catch (_: Exception) {
+            0L
+        }
+    }
+
+    /**
+     * Unregisters the prefs listener. Services that own a HistoryManager must call
+     * this from onDestroy; never construct a manager per key event.
+     */
+    fun close() {
+        try {
+            prefs.unregisterOnSharedPreferenceChangeListener(prefChangeListener)
+        } catch (e: Exception) {
+            Log.w("Ditto", "HistoryManager.close failed: $e")
         }
     }
 }

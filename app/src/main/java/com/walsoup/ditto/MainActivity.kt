@@ -1,6 +1,7 @@
 package com.walsoup.ditto
 
 import android.Manifest
+import android.app.Application
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -39,11 +40,12 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.material.icons.Icons
@@ -52,8 +54,16 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.activity.viewModels
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -76,9 +86,6 @@ import com.walsoup.ditto.ui.LibraryScreen
 import com.walsoup.ditto.ui.RecordSheetHost
 import com.walsoup.ditto.ui.RecordStage
 import com.walsoup.ditto.ui.SettingsScreen
-import com.walsoup.ditto.ui.tumble.DittoHomePalette
-import com.walsoup.ditto.ui.tumble.LocalTumbleStage
-import com.walsoup.ditto.ui.tumble.TumbleGround
 import com.walsoup.linen.EmptyState
 import com.walsoup.linen.PageHeader
 import com.walsoup.linen.RecordDock
@@ -88,8 +95,6 @@ import com.walsoup.linen.SettingLine
 import com.walsoup.linen.SwitchLine
 import com.walsoup.linen.TextTabs
 import com.walsoup.linen.TrackRow
-import dev.seaglass.compose.SeaGlassStageHost
-import dev.seaglass.compose.SeaGlassTheme
 import com.walsoup.ditto.ui.trackSubtitle
 import com.walsoup.ditto.ui.trackTitle
 import java.io.File
@@ -105,9 +110,8 @@ enum class ScreenTab(val title: String) {
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var recorderEngine: AudioRecorderEngine
-    private lateinit var playerHelper: AudioPlayerHelper
     private lateinit var historyManager: HistoryManager
+    private val recordStageModel: RecordStageViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,30 +120,64 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
         )
 
-        recorderEngine = AudioRecorderEngine(this)
-        playerHelper = AudioPlayerHelper(this)
         historyManager = HistoryManager(this)
 
         setContent {
             LinenTheme {
-                SeaGlassTheme(palette = DittoHomePalette) {
-                    SeaGlassStageHost(
-                        modifier = Modifier.fillMaxSize(),
-                        background = { TumbleGround() },
-                    ) { stage ->
-                        CompositionLocalProvider(LocalTumbleStage provides stage) {
-                            AppRoot(recorderEngine, playerHelper, historyManager)
-                        }
-                    }
-                }
+                AppRoot(
+                    recorderEngine = recordStageModel.recorderEngine,
+                    playerHelper = recordStageModel.playerHelper,
+                    historyManager = historyManager,
+                    stageModel = recordStageModel
+                )
             }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        // Rotation recreates the activity without finishing: keep the take, the mic and the
+        // player alive (they live in the ViewModel). Only tear down when the user really leaves.
+        if (isFinishing) {
+            recordStageModel.playerHelper.stop()
+            recordStageModel.recorderEngine.cancelRecording()
+            historyManager.close()
+        }
+    }
+}
+
+/**
+ * Survives configuration changes so a rotation keeps the take, the review sheet and the live
+ * microphone. The recorder and player live here on purpose: an activity-scoped recorder leaks an
+ * open AudioRecord on rotation while the new activity starts a second one.
+ */
+class RecordStageViewModel(app: Application) : AndroidViewModel(app) {
+    val recorderEngine = AudioRecorderEngine(app)
+    val playerHelper = AudioPlayerHelper(app)
+    var stage: RecordStage by mutableStateOf<RecordStage>(RecordStage.Idle)
+}
+
+/**
+ * Single source of truth for which library item is loaded in the player.
+ * Lives in AppRoot (above the tab switch) so leaving the tab can't orphan audio.
+ */
+class SharedPlayback {
+    private val _playingId = MutableStateFlow<String?>(null)
+    val playingId: StateFlow<String?> = _playingId.asStateFlow()
+
+    fun track(id: String?, playerHelper: AudioPlayerHelper, file: File) {
+        if (!file.exists()) return
+        _playingId.value = id
+        try {
+            playerHelper.playFile(file) { _playingId.value = null }
+        } catch (_: Exception) {
+            _playingId.value = null
+        }
+    }
+
+    fun clear(playerHelper: AudioPlayerHelper) {
         playerHelper.stop()
-        recorderEngine.cancelRecording()
+        _playingId.value = null
     }
 }
 
@@ -147,20 +185,41 @@ class MainActivity : ComponentActivity() {
 fun AppRoot(
     recorderEngine: AudioRecorderEngine,
     playerHelper: AudioPlayerHelper,
-    historyManager: HistoryManager
+    historyManager: HistoryManager,
+    stageModel: RecordStageViewModel
 ) {
     val c = Linen.colors
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var selectedTab by rememberSaveable { mutableStateOf(ScreenTab.RECORD) }
-    var stage by remember { mutableStateOf<RecordStage>(RecordStage.Idle) }
     val snackbarHostState = remember { SnackbarHostState() }
+    val appScope = rememberCoroutineScope()
+    val sharedPlayback = remember { SharedPlayback() }
     val isRecording by recorderEngine.isRecording.collectAsState()
     val history by historyManager.history.collectAsState()
     val lastTargetPackage = history.firstOrNull { it.targetPackage != null }?.targetPackage
     val permissions = rememberPermissions(historyManager)
 
-    BackHandler(enabled = selectedTab != ScreenTab.RECORD && stage is RecordStage.Idle) {
+    // Undoable delete lives in AppRoot's scope so a tab switch can't orphan the file:
+    // HistoryManager's own IO scope does the list/file work off the main thread.
+    fun deleteWithUndo(item: com.walsoup.ditto.core.audio.HistoryItem) {
+        sharedPlayback.clear(playerHelper)
+        historyManager.stageDeleteItem(item.id)
+        appScope.launch {
+            val result = snackbarHostState.showSnackbar(
+                message = "Note deleted",
+                actionLabel = "Undo",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) {
+                historyManager.restoreItem(item)
+            } else {
+                historyManager.permanentlyDeleteFile(item.filePath)
+            }
+        }
+    }
+
+    BackHandler(enabled = selectedTab != ScreenTab.RECORD && stageModel.stage is RecordStage.Idle) {
         selectedTab = ScreenTab.RECORD
     }
 
@@ -170,8 +229,9 @@ fun AppRoot(
             permissions.requestMic()
         } else {
             playerHelper.stop()
+            sharedPlayback.clear(playerHelper)
             if (recorderEngine.startRecording()) {
-                stage = RecordStage.Recording
+                stageModel.stage = RecordStage.Recording
             } else {
                 Toast.makeText(context, "Microphone unavailable", Toast.LENGTH_SHORT).show()
             }
@@ -229,10 +289,21 @@ fun AppRoot(
                         ScreenTab.RECORD -> HomeScreen(
                             historyManager = historyManager,
                             playerHelper = playerHelper,
+                            sharedPlayback = sharedPlayback,
                             permissions = permissions,
                             onOpenLibrary = { selectedTab = ScreenTab.LIBRARY }
                         )
-                        ScreenTab.LIBRARY -> LibraryScreen(historyManager, playerHelper, snackbarHostState)
+                        ScreenTab.LIBRARY -> LibraryScreen(
+                            historyManager = historyManager,
+                            playerHelper = playerHelper,
+                            activePlayingId = sharedPlayback.playingId,
+                            onPlayItem = { item ->
+                                sharedPlayback.track(item.id, playerHelper, File(item.filePath))
+                            },
+                            onStopPlayback = { sharedPlayback.clear(playerHelper) },
+                            onDeleteItem = ::deleteWithUndo,
+                            onOpenRecord = { selectedTab = ScreenTab.RECORD }
+                        )
                         ScreenTab.SETTINGS -> SettingsScreen(historyManager)
                     }
                 }
@@ -240,8 +311,8 @@ fun AppRoot(
         }
 
         RecordSheetHost(
-            stage = stage,
-            onStageChange = { stage = it },
+            stage = stageModel.stage,
+            onStageChange = { stageModel.stage = it },
             recorderEngine = recorderEngine,
             playerHelper = playerHelper,
             historyManager = historyManager,
@@ -255,6 +326,7 @@ fun AppRoot(
 fun HomeScreen(
     historyManager: HistoryManager,
     playerHelper: AudioPlayerHelper,
+    sharedPlayback: SharedPlayback,
     permissions: PermissionsState,
     onOpenLibrary: () -> Unit
 ) {
@@ -262,9 +334,10 @@ fun HomeScreen(
     val context = LocalContext.current
     val history by historyManager.history.collectAsState()
     val isPlaying by playerHelper.isPlaying.collectAsState()
+    val playingId by sharedPlayback.playingId.collectAsState()
+    val progressMs by playerHelper.progressMs.collectAsState()
     val isAppFilterEnabled by historyManager.isAppFilterEnabledFlow.collectAsState()
     val selectedPackages by historyManager.selectedAppPackagesFlow.collectAsState()
-    var playingId by remember { mutableStateOf<String?>(null) }
     var setupExpanded by rememberSaveable { mutableStateOf(false) }
     var voiceMenuOpen by remember { mutableStateOf(false) }
     var defaultFilter by remember { mutableStateOf(historyManager.defaultFilter) }
@@ -374,12 +447,10 @@ fun HomeScreen(
                     onClick = {
                         if (isPlaying && playingId == item.id) {
                             playerHelper.pause()
+                        } else if (playingId == item.id && progressMs > 0) {
+                            playerHelper.resume()
                         } else {
-                            val file = File(item.filePath)
-                            if (file.exists()) {
-                                playingId = item.id
-                                playerHelper.playFile(file) { playingId = null }
-                            }
+                            sharedPlayback.track(item.id, playerHelper, File(item.filePath))
                         }
                     }
                 )
@@ -431,7 +502,9 @@ class PermissionsState(private val context: Context, private val historyManager:
         if (historyManager.isFloatingServiceEnabled && overlay && mic && !FloatingBubbleService.isRunning) {
             startBubbleService(context)
         }
-        bubbleOn = FloatingBubbleService.isRunning || historyManager.isFloatingServiceEnabled
+        // isFloatingServiceEnabled stays true after the system kills the service;
+        // the switch must reflect whether the bubble is actually running.
+        bubbleOn = FloatingBubbleService.isRunning
     }
 
     internal fun onMicResult(granted: Boolean) { mic = granted }

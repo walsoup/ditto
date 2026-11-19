@@ -7,15 +7,14 @@
 - **Package & Application ID**: Always use `com.walsoup.<appname_lowercase>` (never use boilerplate `com.example.*`).
 - **FileProvider Authority**: Use `${applicationId}.provider` in `AndroidManifest.xml` and `"${context.packageName}.provider"` in Kotlin.
 
-## 2. UI/UX Design System (Tumble / Shore sea glass)
-- **UI**: build every screen with the Tumble / Shore design language; follow `linen-tumble/AGENTS.md`. Ditto's adoption layer lives in `app/.../ui/tumble/` (`DittoHomePalette`, `LocalTumbleStage`, `TumbleGround`).
-- **Migration**: strangler pattern. `LinenTheme` stays outermost in `MainActivity` while pieces migrate to glass one by one. New glass goes through `ui/tumble/`; do not add new Linen components.
-- **Tumble roles for Ditto**: home = Seafoam primary actions; Milk (day) / Obsidian (night) neutrals; Ember = recording/stop/destructive (replaces terracotta); Cobalt = info, Kelp = success, Amber = warning.
+## 2. UI/UX Design System (Linen)
+- **UI**: build every screen with the Linen design system; follow `design/AGENTS.md`.
+- **The Tumble / Shore sea-glass attempt is abandoned.** Do not reintroduce `linen-tumble/`, `ui/tumble/`, AGS shaders or glass surfaces. Linen is the only design language in the app.
 - **Strict Visual Invariants**:
-  - **NO PURPLE**: never use the Sea Lavender palette.
-  - **NO GRADIENTS**: flat solid grounds only (no gradient backdrops). Kit-internal glass frost shading is the material, not a gradient.
-  - **NO GLOW/NEON EFFECTS**: never use Citrine glow.
-  - **GLASS IS SCARCE**: ~12 pieces per view, max 2 deep. Text, rows and dividers stay etched on Linen.
+  - **NO PURPLE**: no violet or lavender anywhere.
+  - **NO GRADIENTS**: flat solid grounds only.
+  - **NO GLOW/NEON EFFECTS**.
+  - **FLAT AND CALM**: solid grounds, 1dp hairlines, tonal fills, one accent per screen. Read every colour from `Linen.colors`, type from `Linen.type`, spacing and radii from `LinenDimens` — hex values and raw dp radii in screen code mean a token is missing.
 
 ## 3. Ergonomics & Audio Recording Controls
 - **NO Large Circular Record Buttons**: Do not generate oversized circular FABs for recording.

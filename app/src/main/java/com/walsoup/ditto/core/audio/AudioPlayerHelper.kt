@@ -5,6 +5,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,7 +73,7 @@ class AudioPlayerHelper(private val context: Context) {
                 prepareAsync()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.w("Ditto", "Playback failed for ${file.name}", e)
             stopProgressPolling()
             _isPlaying.value = false
         }

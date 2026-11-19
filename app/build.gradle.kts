@@ -21,8 +21,8 @@ android {
         applicationId = "com.walsoup.ditto"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0.1"
+        versionCode = 10
+        versionName = "1.1.0"
         resourceConfigurations += setOf("en")
     }
 
@@ -110,7 +110,6 @@ dependencies {
   implementation(libs.androidx.compose.material3)
   implementation(libs.androidx.compose.material.icons.extended)
   implementation(project(":design"))
-  implementation(project(":seaglass-compose"))
   // Tooling
   debugImplementation(libs.androidx.compose.ui.tooling)
   // Instrumented tests

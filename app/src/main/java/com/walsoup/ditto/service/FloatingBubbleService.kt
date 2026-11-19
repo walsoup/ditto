@@ -6,11 +6,21 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
 import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.foundation.background
@@ -49,6 +59,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -92,7 +103,10 @@ import com.walsoup.ditto.data.HistoryManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -102,6 +116,9 @@ class FloatingBubbleService : Service() {
 
     companion object {
         const val EXTRA_AUTO_RECORD = "com.walsoup.ditto.EXTRA_AUTO_RECORD"
+        const val ACTION_STOP_RECORDING = "com.walsoup.ditto.ACTION_STOP_RECORDING"
+        const val NOTIF_ID = 1001
+        const val CHANNEL_ID = "ditto_overlay_channel"
 
         var isRunning: Boolean = false
             private set
@@ -139,6 +156,49 @@ class FloatingBubbleService : Service() {
     private lateinit var playerHelper: AudioPlayerHelper
     private lateinit var historyManager: HistoryManager
 
+    private val isExporting = MutableStateFlow(false)
+    private val exportProgress = MutableStateFlow(0f)
+
+    private var stopInFlight = false
+    private var notifTicker: Job? = null
+
+    private var micMuteRegistered = false
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private val transientPreviewFiles = mutableSetOf<String>()
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        if (focusChange == AudioManager.AUDIOFOCUS_LOSS ||
+            focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT
+        ) {
+            if (overlayState.value == OverlayUiState.RECORDING && !recorderEngine.isPaused.value) {
+                recorderEngine.pauseRecording()
+                Toast.makeText(this, "Recording paused \u2014 audio interrupted", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private val micMuteReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != AudioManager.ACTION_MICROPHONE_MUTE_CHANGED) return
+            try {
+                val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                if (am.isMicrophoneMute &&
+                    overlayState.value == OverlayUiState.RECORDING &&
+                    !recorderEngine.isPaused.value
+                ) {
+                    recorderEngine.pauseRecording()
+                    Toast.makeText(
+                        this@FloatingBubbleService,
+                        "Microphone muted \u2014 recording paused",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                Log.w("Ditto", "Mic-mute check failed", e)
+            }
+        }
+    }
+
     private val windowParams = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -175,6 +235,8 @@ class FloatingBubbleService : Service() {
         historyManager = HistoryManager(this)
 
         startForegroundNotification()
+        registerMicMuteReceiver()
+        observeLimitReached()
 
         lifecycleOwner = OverlayLifecycleOwner()
         lifecycleOwner.onCreate()
@@ -273,6 +335,10 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP_RECORDING) {
+            stopRecordingInternal()
+            return START_STICKY
+        }
         if (intent?.getBooleanExtra(EXTRA_AUTO_RECORD, false) == true) {
             serviceScope.launch(Dispatchers.Main) {
                 updateOverlayVisibility(true)
@@ -300,61 +366,252 @@ class FloatingBubbleService : Service() {
     }
 
     private fun startRecordingInternal(): Boolean {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        if (audioManager.isMicrophoneMute) {
+            Toast.makeText(this, "Microphone is muted", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        requestMicAudioFocus()
         val started = recorderEngine.startRecording()
         if (started) {
             overlayState.value = OverlayUiState.RECORDING
             HapticFeedbackHelper.vibrateStart(this)
+            startNotifTicker()
+        } else {
+            abandonMicAudioFocus()
+            postIdleNotification()
         }
         return started
     }
 
     private fun stopRecordingInternal() {
+        if (overlayState.value != OverlayUiState.RECORDING || stopInFlight) return
+        stopInFlight = true
         HapticFeedbackHelper.vibrateStop(this)
         val currentDuration = recorderEngine.durationMs.value
         recordedDurationMs.value = currentDuration
-        val file = recorderEngine.stopRecording()
-        if (file != null && file.exists()) {
-            recordedWavFile.value = file
-            selectedFilter.value = VoiceFilter.RAW
-            activePlayableFile.value = file
-            if (historyManager.isAutoPasteEnabled) {
-                val foregroundPkg = DittoAccessibilityService.currentForegroundPackage.value
-                val targetFormat = PastePolicy.targetFormatForPackage(
-                    foregroundPkg,
-                    historyManager.selectedFormat
-                )
-                serviceScope.launch {
-                    val fileToSend = withContext(Dispatchers.IO) {
-                        AudioFileManager.generateFilteredAudio(
-                            context = this@FloatingBubbleService,
-                            inputFile = file,
-                            filter = VoiceFilter.RAW,
-                            targetFormat = targetFormat
-                        )
-                    }
-                    withContext(Dispatchers.Main) {
-                        AudioFileManager.copyAndRecordToHistory(
-                            context = this@FloatingBubbleService,
-                            file = fileToSend,
-                            durationMs = currentDuration,
-                            filter = VoiceFilter.RAW,
-                            format = targetFormat,
-                            historyManager = historyManager,
-                            targetPackage = PastePolicy.autoStopTargetPackage(foregroundPkg)
-                        )
-                        collapseOverlay()
+        abandonMicAudioFocus()
+        stopNotifTicker()
+        serviceScope.launch {
+            try {
+                val file = withContext(Dispatchers.IO) {
+                    try {
+                        recorderEngine.stopRecordingAsync()
+                    } catch (e: Exception) {
+                        Log.w("Ditto", "stopRecording failed", e)
+                        null
                     }
                 }
-            } else {
-                overlayState.value = OverlayUiState.REVIEW_AND_FILTER
+                if (file != null && file.exists()) {
+                    recordedWavFile.value = file
+                    selectedFilter.value = VoiceFilter.RAW
+                    activePlayableFile.value = file
+                    if (historyManager.isAutoPasteEnabled) {
+                        val foregroundPkg = DittoAccessibilityService.currentForegroundPackage.value
+                        val targetFormat = PastePolicy.targetFormatForPackage(
+                            foregroundPkg,
+                            historyManager.selectedFormat
+                        )
+                        val fileToSend = withContext(Dispatchers.IO) {
+                            try {
+                                AudioFileManager.exportFile(
+                                    context = this@FloatingBubbleService,
+                                    inputFile = file,
+                                    filter = VoiceFilter.RAW,
+                                    format = targetFormat
+                                )
+                            } catch (e: Exception) {
+                                Log.w("Ditto", "Auto-paste export failed, sending raw take", e)
+                                file
+                            }
+                        }
+                        withContext(Dispatchers.IO) {
+                            AudioFileManager.copyAndRecordToHistory(
+                                context = this@FloatingBubbleService,
+                                file = fileToSend,
+                                durationMs = currentDuration,
+                                filter = VoiceFilter.RAW,
+                                format = targetFormat,
+                                historyManager = historyManager,
+                                targetPackage = PastePolicy.autoStopTargetPackage(foregroundPkg)
+                            )
+                        }
+                        if (historyManager.isHistoryEnabled &&
+                            file.absolutePath != fileToSend.absolutePath
+                        ) {
+                            runCatching { file.delete() }
+                        }
+                        collapseOverlay()
+                    } else {
+                        overlayState.value = OverlayUiState.REVIEW_AND_FILTER
+                    }
+                } else {
+                    collapseOverlay()
+                }
+            } finally {
+                stopInFlight = false
+                postIdleNotification()
             }
-        } else {
-            collapseOverlay()
+        }
+    }
+
+    private fun cancelRecordingInternal() {
+        stopNotifTicker()
+        abandonMicAudioFocus()
+        try {
+            recorderEngine.cancelRecording()
+        } catch (e: Exception) {
+            Log.w("Ditto", "Cancel recording failed", e)
+        }
+        postIdleNotification()
+        collapseOverlay()
+    }
+
+    private fun requestMicAudioFocus() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setOnAudioFocusChangeListener(
+                        audioFocusChangeListener,
+                        Handler(Looper.getMainLooper())
+                    )
+                    .build()
+                audioFocusRequest = request
+                if (am.requestAudioFocus(request) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    Log.w("Ditto", "Mic audio focus request denied")
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val result = am.requestAudioFocus(
+                    audioFocusChangeListener,
+                    AudioManager.STREAM_VOICE_CALL,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
+                )
+                if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                    Log.w("Ditto", "Mic audio focus request denied")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("Ditto", "Audio focus request failed", e)
+        }
+    }
+
+    private fun abandonMicAudioFocus() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                am.abandonAudioFocus(audioFocusChangeListener)
+            }
+        } catch (e: Exception) {
+            Log.w("Ditto", "Abandon audio focus failed", e)
+        }
+    }
+
+    private fun registerMicMuteReceiver() {
+        if (micMuteRegistered) return
+        try {
+            val filter = IntentFilter(AudioManager.ACTION_MICROPHONE_MUTE_CHANGED)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(micMuteReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(micMuteReceiver, filter)
+            }
+            micMuteRegistered = true
+        } catch (e: Exception) {
+            Log.w("Ditto", "Mic-mute receiver registration failed", e)
+        }
+    }
+
+    private fun unregisterMicMuteReceiver() {
+        if (!micMuteRegistered) return
+        micMuteRegistered = false
+        try {
+            unregisterReceiver(micMuteReceiver)
+        } catch (e: Exception) {
+            Log.w("Ditto", "Mic-mute receiver unregister failed", e)
+        }
+    }
+
+    private fun observeLimitReached() {
+        serviceScope.launch {
+            recorderEngine.limitReached.collect { reached ->
+                if (reached && overlayState.value == OverlayUiState.RECORDING) {
+                    Toast.makeText(
+                        this@FloatingBubbleService,
+                        "Max recording length reached",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    stopRecordingInternal()
+                }
+            }
+        }
+    }
+
+    private fun startNotifTicker() {
+        stopNotifTicker()
+        updateRecordingNotification(recorderEngine.durationMs.value)
+        notifTicker = serviceScope.launch {
+            while (isActive) {
+                delay(1000)
+                updateRecordingNotification(recorderEngine.durationMs.value)
+            }
+        }
+    }
+
+    private fun stopNotifTicker() {
+        notifTicker?.cancel()
+        notifTicker = null
+    }
+
+    private fun trackPreview(file: File) {
+        synchronized(transientPreviewFiles) {
+            val it = transientPreviewFiles.iterator()
+            while (it.hasNext()) {
+                val old = it.next()
+                if (old != file.absolutePath) {
+                    runCatching { File(old).delete() }
+                    it.remove()
+                }
+            }
+            transientPreviewFiles.add(file.absolutePath)
+        }
+    }
+
+    private fun cleanupTakeFiles(keepPath: String?) {
+        try {
+            recordedWavFile.value?.let { raw ->
+                if (raw.absolutePath != keepPath && raw.exists()) {
+                    runCatching { raw.delete() }
+                }
+            }
+            synchronized(transientPreviewFiles) {
+                val it = transientPreviewFiles.iterator()
+                while (it.hasNext()) {
+                    val path = it.next()
+                    if (path != keepPath) {
+                        runCatching { File(path).delete() }
+                        it.remove()
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("Ditto", "Take cleanup failed", e)
         }
     }
 
     private fun startForegroundNotification() {
-        val channelId = "ditto_overlay_channel"
+        val channelId = CHANNEL_ID
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 channelId,
@@ -365,23 +622,75 @@ class FloatingBubbleService : Service() {
             manager.createNotificationChannel(channel)
         }
 
+        val notification = buildIdleNotification(channelId)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIF_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            )
+        } else {
+            startForeground(NOTIF_ID, notification)
+        }
+    }
+
+    private fun launchPendingIntent(): PendingIntent {
         val launchIntent = Intent(this, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
+        return PendingIntent.getActivity(
             this,
             0,
             launchIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
+    }
 
-        val notification: Notification = NotificationCompat.Builder(this, channelId)
+    private fun buildIdleNotification(channelId: String): Notification {
+        return NotificationCompat.Builder(this, channelId)
             .setContentTitle("Ditto is active")
             .setContentText("Tap floating mic to record")
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentIntent(pendingIntent)
+            .setContentIntent(launchPendingIntent())
             .setOngoing(true)
             .build()
+    }
 
-        startForeground(1001, notification)
+    private fun postIdleNotification() {
+        try {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIF_ID, buildIdleNotification(CHANNEL_ID))
+        } catch (e: Exception) {
+            Log.w("Ditto", "Idle notification update failed", e)
+        }
+    }
+
+    private fun updateRecordingNotification(elapsedMs: Long) {
+        val totalSeconds = elapsedMs / 1000
+        val elapsed = String.format("%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+        val stopIntent = Intent(this, FloatingBubbleService::class.java).apply {
+            action = ACTION_STOP_RECORDING
+        }
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            1,
+            stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Recording… $elapsed")
+            .setContentText("Tap Stop to finish")
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
+            .setContentIntent(launchPendingIntent())
+            .addAction(R.drawable.ic_launcher_monochrome, "Stop", stopPendingIntent)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        try {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.notify(NOTIF_ID, notification)
+        } catch (e: Exception) {
+            Log.w("Ditto", "Recording notification update failed", e)
+        }
     }
 
     private fun updateWindowPosition(dx: Float, dy: Float) {
@@ -430,6 +739,8 @@ class FloatingBubbleService : Service() {
     private fun OverlayContent() {
         val state by overlayState
         val isPlaying by playerHelper.isPlaying.collectAsState()
+        val exporting by isExporting.collectAsState()
+        val progress by exportProgress.collectAsState()
         val scope = rememberCoroutineScope()
 
         val bubbleSize by historyManager.bubbleSizeFlow.collectAsState()
@@ -586,8 +897,7 @@ class FloatingBubbleService : Service() {
 
                             IconButton(
                                 onClick = {
-                                    recorderEngine.cancelRecording()
-                                    collapseOverlay()
+                                    cancelRecordingInternal()
                                 },
                                 modifier = Modifier.size(28.dp)
                             ) {
@@ -682,21 +992,30 @@ class FloatingBubbleService : Service() {
                                             selectedFilter.value = filter
                                             val original = recordedWavFile.value
                                             if (original != null) {
-                                                val targetFormat = PastePolicy.targetFormatForPackage(
-                                                    DittoAccessibilityService.currentForegroundPackage.value,
-                                                    historyManager.selectedFormat
-                                                )
                                                 scope.launch {
-                                                    val filtered = withContext(Dispatchers.IO) {
-                                                        AudioFileManager.generateFilteredAudio(
-                                                            this@FloatingBubbleService,
-                                                            original,
-                                                            filter,
-                                                            targetFormat
-                                                        )
+                                                    val preview = withContext(Dispatchers.IO) {
+                                                        try {
+                                                            AudioFileManager.previewFile(
+                                                                this@FloatingBubbleService,
+                                                                original,
+                                                                filter
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            Log.w("Ditto", "Preview failed for filter ${filter.name}", e)
+                                                            null
+                                                        }
                                                     }
-                                                    activePlayableFile.value = filtered
-                                                    playerHelper.playFile(filtered)
+                                                    if (preview != null) {
+                                                        trackPreview(preview)
+                                                        activePlayableFile.value = preview
+                                                        playerHelper.playFile(preview)
+                                                    } else {
+                                                        Toast.makeText(
+                                                            this@FloatingBubbleService,
+                                                            "Couldn't preview this filter",
+                                                            Toast.LENGTH_SHORT
+                                                        ).show()
+                                                    }
                                                 }
                                             }
                                         },
@@ -725,6 +1044,7 @@ class FloatingBubbleService : Service() {
                             ) {
                                 Button(
                                     onClick = {
+                                        if (isExporting.value) return@Button
                                         playerHelper.stop()
                                         val original = recordedWavFile.value
                                         val existingPrepared = activePlayableFile.value
@@ -734,56 +1054,80 @@ class FloatingBubbleService : Service() {
                                                 historyManager.selectedFormat
                                             )
                                             scope.launch {
-                                                val fileToSend = if (existingPrepared != null &&
-                                                    ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
-                                                     (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
-                                                    existingPrepared
-                                                } else {
-                                                    withContext(Dispatchers.IO) {
-                                                        AudioFileManager.generateFilteredAudio(
-                                                            context = this@FloatingBubbleService,
-                                                            inputFile = original,
-                                                            filter = selectedFilter.value,
-                                                            targetFormat = targetFormat
-                                                        )
-                                                    }
-                                                }
-                                                withContext(Dispatchers.Main) {
-                                                    if (isWhatsApp) {
-                                                        try {
-                                                            val shareIntent = AudioFileManager.createShareIntent(
-                                                                this@FloatingBubbleService,
-                                                                fileToSend
-                                                            ).apply {
-                                                                setPackage(currentPkg)
-                                                            }
-                                                            startActivity(shareIntent)
-                                                            historyManager.addRecording(
-                                                                file = fileToSend,
-                                                                durationMs = recordedDurationMs.value,
+                                                isExporting.value = true
+                                                exportProgress.value = 0f
+                                                try {
+                                                    val fileToSend = if (existingPrepared != null &&
+                                                        ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
+                                                         (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
+                                                        existingPrepared
+                                                    } else {
+                                                        withContext(Dispatchers.IO) {
+                                                            AudioFileManager.exportFile(
+                                                                context = this@FloatingBubbleService,
+                                                                inputFile = original,
                                                                 filter = selectedFilter.value,
                                                                 format = targetFormat,
-                                                                targetPackage = currentPkg
+                                                                onProgress = { exportProgress.value = it }
                                                             )
-                                                        } catch (e: Exception) {
-                                                             e.printStackTrace()
                                                         }
-                                                    } else {
-                                                        AudioFileManager.copyAndRecordToHistory(
-                                                            context = this@FloatingBubbleService,
-                                                            file = fileToSend,
-                                                            durationMs = recordedDurationMs.value,
-                                                            filter = selectedFilter.value,
-                                                            format = targetFormat,
-                                                            historyManager = historyManager,
-                                                            targetPackage = DittoAccessibilityService.currentForegroundPackage.value
-                                                        )
                                                     }
-                                                    collapseOverlay()
+                                                    withContext(Dispatchers.Main) {
+                                                        if (isWhatsApp) {
+                                                            try {
+                                                                val committed = withContext(Dispatchers.IO) {
+                                                                    historyManager.commitRecording(
+                                                                        sourceFile = fileToSend,
+                                                                        durationMs = recordedDurationMs.value,
+                                                                        filter = selectedFilter.value,
+                                                                        format = targetFormat,
+                                                                        targetPackage = currentPkg
+                                                                    )
+                                                                }
+                                                                val sendFile = committed
+                                                                    ?.filePath
+                                                                    ?.let { File(it) }
+                                                                    ?.takeIf { it.exists() }
+                                                                    ?: fileToSend
+                                                                val shareIntent = AudioFileManager.createShareIntent(
+                                                                    this@FloatingBubbleService,
+                                                                    sendFile
+                                                                ).apply {
+                                                                    setPackage(currentPkg)
+                                                                }
+                                                                startActivity(shareIntent)
+                                                                cleanupTakeFiles(committed?.filePath)
+                                                            } catch (e: Exception) {
+                                                                Log.w("Ditto", "Couldn't send audio to WhatsApp", e)
+                                                                Toast.makeText(
+                                                                    this@FloatingBubbleService,
+                                                                    "Couldn't send audio",
+                                                                    Toast.LENGTH_LONG
+                                                                ).show()
+                                                            }
+                                                        } else {
+                                                            withContext(Dispatchers.IO) {
+                                                                AudioFileManager.copyAndRecordToHistory(
+                                                                    context = this@FloatingBubbleService,
+                                                                    file = fileToSend,
+                                                                    durationMs = recordedDurationMs.value,
+                                                                    filter = selectedFilter.value,
+                                                                    format = targetFormat,
+                                                                    historyManager = historyManager,
+                                                                    targetPackage = DittoAccessibilityService.currentForegroundPackage.value
+                                                                )
+                                                            }
+                                                            cleanupTakeFiles(fileToSend.absolutePath)
+                                                        }
+                                                        collapseOverlay()
+                                                    }
+                                                } finally {
+                                                    isExporting.value = false
                                                 }
                                             }
                                         }
                                     },
+                                    enabled = !exporting,
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = LinenPalette.Forest,
                                         contentColor = Color.White
@@ -806,6 +1150,7 @@ class FloatingBubbleService : Service() {
 
                                 FilledTonalButton(
                                     onClick = {
+                                        if (isExporting.value) return@FilledTonalButton
                                         playerHelper.stop()
                                         val original = recordedWavFile.value
                                         val existingPrepared = activePlayableFile.value
@@ -815,37 +1160,62 @@ class FloatingBubbleService : Service() {
                                                 historyManager.selectedFormat
                                             )
                                             scope.launch {
-                                                val fileToSend = if (existingPrepared != null &&
-                                                    ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
-                                                     (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
-                                                    existingPrepared
-                                                } else {
-                                                    withContext(Dispatchers.IO) {
-                                                        AudioFileManager.generateFilteredAudio(
-                                                            context = this@FloatingBubbleService,
-                                                            inputFile = original,
-                                                            filter = selectedFilter.value,
-                                                            targetFormat = targetFormat
-                                                        )
+                                                isExporting.value = true
+                                                exportProgress.value = 0f
+                                                try {
+                                                    val fileToSend = if (existingPrepared != null &&
+                                                        ((targetFormat == AudioFormatType.M4A && existingPrepared.name.endsWith(".m4a")) ||
+                                                         (targetFormat == AudioFormatType.WAV && existingPrepared.name.endsWith(".wav")))) {
+                                                        existingPrepared
+                                                    } else {
+                                                        withContext(Dispatchers.IO) {
+                                                            AudioFileManager.exportFile(
+                                                                context = this@FloatingBubbleService,
+                                                                inputFile = original,
+                                                                filter = selectedFilter.value,
+                                                                format = targetFormat,
+                                                                onProgress = { exportProgress.value = it }
+                                                            )
+                                                        }
                                                     }
-                                                }
-                                                withContext(Dispatchers.Main) {
-                                                    val shareIntent = AudioFileManager.createShareIntent(
-                                                        this@FloatingBubbleService,
-                                                        fileToSend
-                                                    )
-                                                    startActivity(shareIntent)
-                                                    historyManager.addRecording(
-                                                        file = fileToSend,
-                                                        durationMs = recordedDurationMs.value,
-                                                        filter = selectedFilter.value,
-                                                        format = targetFormat
-                                                    )
-                                                    collapseOverlay()
+                                                    withContext(Dispatchers.Main) {
+                                                        val committed = withContext(Dispatchers.IO) {
+                                                            historyManager.commitRecording(
+                                                                sourceFile = fileToSend,
+                                                                durationMs = recordedDurationMs.value,
+                                                                filter = selectedFilter.value,
+                                                                format = targetFormat
+                                                            )
+                                                        }
+                                                        val sendFile = committed
+                                                            ?.filePath
+                                                            ?.let { File(it) }
+                                                            ?.takeIf { it.exists() }
+                                                            ?: fileToSend
+                                                        try {
+                                                            val shareIntent = AudioFileManager.createShareIntent(
+                                                                this@FloatingBubbleService,
+                                                                sendFile
+                                                            )
+                                                            startActivity(shareIntent)
+                                                        } catch (e: Exception) {
+                                                            Log.w("Ditto", "Couldn't share audio", e)
+                                                            Toast.makeText(
+                                                                this@FloatingBubbleService,
+                                                                "Couldn't share audio",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+                                                        cleanupTakeFiles(committed?.filePath ?: fileToSend.absolutePath)
+                                                        collapseOverlay()
+                                                    }
+                                                } finally {
+                                                    isExporting.value = false
                                                 }
                                             }
                                         }
                                     },
+                                    enabled = !exporting,
                                     colors = ButtonDefaults.filledTonalButtonColors(
                                         containerColor = LinenPalette.Sage,
                                         contentColor = LinenPalette.Forest
@@ -862,6 +1232,24 @@ class FloatingBubbleService : Service() {
                                     Text("Share", fontSize = 12.sp)
                                 }
                             }
+
+                            if (exporting) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                LinearProgressIndicator(
+                                    progress = { progress },
+                                    color = LinenPalette.Forest,
+                                    trackColor = LinenPalette.Sage,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(3.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Preparing…",
+                                    fontSize = 12.sp,
+                                    color = LinenPalette.Muted
+                                )
+                            }
                         }
                     }
                 }
@@ -874,9 +1262,21 @@ class FloatingBubbleService : Service() {
         isRunning = false
         instance = null
         DittoTileService.updateTile(this)
+        stopNotifTicker()
+        unregisterMicMuteReceiver()
+        abandonMicAudioFocus()
         serviceJob.cancel()
         playerHelper.stop()
-        recorderEngine.cancelRecording()
+        try {
+            recorderEngine.cancelRecording()
+        } catch (e: Exception) {
+            Log.w("Ditto", "Cancel recording during destroy failed", e)
+        }
+        try {
+            historyManager.close()
+        } catch (e: Exception) {
+            Log.w("Ditto", "HistoryManager close failed", e)
+        }
         lifecycleOwner.onDestroy()
         if (::overlayView.isInitialized) {
             try {

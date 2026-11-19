@@ -28,6 +28,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +40,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.walsoup.ditto.core.audio.AudioFormatType
 import com.walsoup.ditto.data.BubbleShape
 import com.walsoup.ditto.data.BubbleSize
@@ -73,8 +77,31 @@ fun SettingsScreen(historyManager: HistoryManager) {
     var showAppSelection by remember { mutableStateOf(false) }
     var showLicense by remember { mutableStateOf(false) }
     var showTerms by remember { mutableStateOf(false) }
-    val accessibilityOn = isAccessibilityServiceEnabled(context)
+    var confirmClearStorage by remember { mutableStateOf(false) }
+    // Read once per composition entry, refresh on ON_RESUME — never on every recomposition.
+    var accessibilityOn by remember { mutableStateOf(isAccessibilityServiceEnabled(context)) }
+    var storageBytes by remember { mutableStateOf(historyManager.storageUsedBytes()) }
     val openAccessibility = { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+    val versionName = remember {
+        try {
+            @Suppress("DEPRECATION")
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "—"
+        } catch (_: Exception) {
+            "—"
+        }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                accessibilityOn = isAccessibilityServiceEnabled(context)
+                storageBytes = historyManager.storageUsedBytes()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         Modifier
@@ -226,6 +253,19 @@ fun SettingsScreen(historyManager: HistoryManager) {
         }
 
         SectionTitle("About")
+        SettingLine(
+            label = "Recordings",
+            value = formatBytes(storageBytes),
+            showChevron = false,
+            onClick = null
+        )
+        SettingLine(
+            label = "Clear recordings",
+            subtitle = "Deletes saved notes from this phone",
+            warning = true,
+            onClick = { confirmClearStorage = true }
+        )
+        SettingLine(label = "Version", value = versionName, showChevron = false)
         SettingLine(label = "Developer", value = "walsoup", showChevron = false)
         SettingLine(label = "License", value = "MIT", onClick = { showLicense = true })
         SettingLine(label = "Terms of Service", onClick = { showTerms = true }, showHairline = false)
@@ -273,6 +313,44 @@ fun SettingsScreen(historyManager: HistoryManager) {
     if (showAppSelection) {
         AppSelectionDialog(historyManager = historyManager, onDismissRequest = { showAppSelection = false })
     }
+
+    if (confirmClearStorage) {
+        AlertDialog(
+            onDismissRequest = { confirmClearStorage = false },
+            title = { Text("Clear recordings?", style = Linen.type.title, color = c.text) },
+            text = {
+                Text(
+                    "This deletes ${formatBytes(storageBytes)} of saved notes. It can't be undone.",
+                    style = Linen.type.bodySecondary,
+                    color = c.textSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    historyManager.clearHistory()
+                    storageBytes = historyManager.storageUsedBytes()
+                    confirmClearStorage = false
+                }) { Text("Clear", style = Linen.type.label, color = c.rec) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearStorage = false }) { Text("Cancel", style = Linen.type.label, color = c.primary) }
+            },
+            containerColor = c.surface,
+            shape = RoundedCornerShape(24.dp)
+        )
+    }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0) return "0 B"
+    val units = arrayOf("B", "KB", "MB", "GB")
+    var value = bytes.toDouble()
+    var unit = 0
+    while (value >= 1024 && unit < units.lastIndex) {
+        value /= 1024
+        unit += 1
+    }
+    return if (unit == 0) "$bytes B" else String.format(java.util.Locale.US, "%.1f %s", value, units[unit])
 }
 
 @Composable

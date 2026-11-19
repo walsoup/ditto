@@ -6,7 +6,6 @@ import android.provider.Settings
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -60,6 +59,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -159,16 +162,13 @@ fun AppSelectionDialog(
 
                     IconButton(
                         onClick = onDismissRequest,
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SageContainerLow)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Close",
                             tint = SageText,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -179,11 +179,12 @@ fun AppSelectionDialog(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(44.dp)
+                        .height(48.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(SageBg)
                         .border(1.dp, SageBorder, RoundedCornerShape(12.dp))
-                        .padding(horizontal = 12.dp),
+                        .padding(horizontal = 12.dp)
+                        .semantics { contentDescription = "Search apps" },
                     contentAlignment = Alignment.CenterStart
                 ) {
                     Row(
@@ -215,19 +216,21 @@ fun AppSelectionDialog(
                                     fontWeight = FontWeight.Normal
                                 ),
                                 cursorBrush = SolidColor(SagePrimary),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { contentDescription = "Search apps by name" }
                             )
                         }
                         if (searchQuery.isNotEmpty()) {
                             IconButton(
                                 onClick = { searchQuery = "" },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear",
+                                    contentDescription = "Clear search",
                                     tint = SageSubtext,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
@@ -447,7 +450,8 @@ private fun AppItemRow(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (isChecked) SageContainerLow else Color.Transparent)
-            .clickable { onToggle(!isChecked) }
+            .toggleable(value = isChecked, role = Role.Checkbox, onValueChange = onToggle)
+            .semantics { stateDescription = if (isChecked) "Selected" else "Not selected" }
             .padding(horizontal = 8.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -496,7 +500,7 @@ private fun AppItemRow(
 
         Checkbox(
             checked = isChecked,
-            onCheckedChange = { onToggle(it) },
+            onCheckedChange = null,
             colors = CheckboxDefaults.colors(
                 checkedColor = SagePrimary,
                 checkmarkColor = Linen.colors.onPrimary,

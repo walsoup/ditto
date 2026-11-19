@@ -66,6 +66,13 @@ object M4aEncoder {
         try {
             runCatching { outputFile.delete() }
 
+            // Never encode an already-encoded container: resolvePcmRegion would treat its
+            // bytes as headerless PCM and produce a corrupted double-encoded file.
+            if (isEncodedContainerExtension(inputFile.extension)) {
+                Log.w(TAG, "AAC encode refused: ${inputFile.name} is an encoded container, not PCM/WAV")
+                return false
+            }
+
             val region = if (inputFile.exists()) resolvePcmRegion(inputFile) else PcmRegion(0L, 0L)
             if (region.length <= 0L) {
                 Log.w(TAG, "AAC encode skipped: ${inputFile.name} is missing or has no PCM data")

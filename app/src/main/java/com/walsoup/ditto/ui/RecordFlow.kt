@@ -248,6 +248,9 @@ private fun RecordingContent(
                 container = c.containerLow,
                 tint = c.textSecondary,
                 onClick = {
+                    // Disabled while the take is being saved: cancelling now can't abort the
+                    // in-flight write and the sheet would reopen on the saved file.
+                    if (stopping) return@RoundIconButton
                     recorderEngine.cancelRecording()
                     onStageChange(RecordStage.Idle)
                 }
@@ -343,7 +346,9 @@ private fun ReviewContent(
                 // clipboard URI or share intent built from the old cache path would go dead.
                 val committed = withContext(Dispatchers.IO) {
                     runCatching {
-                        historyManager.commitRecording(file, review.durationMs, filter, format, targetPackage)
+                        // commitRecording derives the stored format from the committed file,
+                        // so a WAV fallback after a failed AAC export is recorded as WAV.
+                        historyManager.commitRecording(file, review.durationMs, filter, targetPackage)
                     }.onFailure { Log.w("Ditto", "commitRecording failed", it) }.getOrNull()
                 }
                 val sendFile = committed?.filePath?.let { File(it) }?.takeIf { it.exists() } ?: file
@@ -465,6 +470,7 @@ private fun ReviewContent(
             ActionButton(
                 text = "Discard",
                 style = ActionStyle.Ghost,
+                enabled = !busy,
                 onClick = { discard() },
                 modifier = Modifier.weight(1f)
             )
